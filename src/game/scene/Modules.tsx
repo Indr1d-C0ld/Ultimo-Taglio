@@ -26,13 +26,28 @@ function useLamp(prop: Prop, pattern: RegExp, color: string): THREE.MeshStandard
 }
 
 /** Flat panel laid just over a part's top face: displays, legends. */
-function Face({ box, map, inset = 1, lift = 0.002 }: { box: THREE.Box3; map: THREE.Texture; inset?: number; lift?: number }) {
+function Face({
+  box,
+  map,
+  inset = 1,
+  lift = 0.002,
+  glow = 1,
+}: {
+  box: THREE.Box3;
+  map: THREE.Texture;
+  inset?: number;
+  lift?: number;
+  /** Above 1 the panel is brighter than white, which is what makes it bloom like a lit display. */
+  glow?: number;
+}) {
   const size = box.getSize(new THREE.Vector3());
   const mid = box.getCenter(new THREE.Vector3());
+  // Without the bloom pass there is nothing to catch the overshoot: it would just clip to white.
+  const level = useGame((s) => (s.effects ? glow : 1));
   return (
     <mesh position={[mid.x, box.max.y + lift, mid.z]} rotation={[-Math.PI / 2, 0, 0]}>
       <planeGeometry args={[size.x * inset, size.z * inset]} />
-      <meshBasicMaterial map={map} toneMapped={false} transparent />
+      <meshBasicMaterial map={map} color={[level, level, level]} toneMapped={false} transparent />
     </mesh>
   );
 }
@@ -64,7 +79,7 @@ export function TimerModule({ selected }: { selected: boolean }) {
   return (
     <group>
       <primitive object={prop.object} />
-      <Face box={window} map={tex} inset={0.96} />
+      <Face box={window} map={tex} inset={0.96} glow={2.4} />
     </group>
   );
 }
@@ -144,7 +159,7 @@ export function KeypadModule({ selected }: { selected: boolean }) {
           </group>
         );
       })}
-      <Face box={window} map={readout(unlocked ? "APERTO" : entry.padEnd(4, "·"))} />
+      <Face box={window} map={readout(unlocked ? "APERTO" : entry.padEnd(4, "·"))} glow={1.8} />
     </group>
   );
 }

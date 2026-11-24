@@ -16,6 +16,23 @@ import type { Action, RunState } from "./types";
 
 export const fx = { shake: 0 };
 
+function readFlag(key: string, fallback: boolean): boolean {
+  try {
+    const raw = typeof localStorage === "undefined" ? null : localStorage.getItem(key);
+    return raw === null ? fallback : raw === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function writeFlag(key: string, value: boolean) {
+  try {
+    localStorage.setItem(key, value ? "1" : "0");
+  } catch {
+    // A preference that cannot be saved still applies for this session.
+  }
+}
+
 interface UiState {
   archive: boolean;
   sound: boolean;
@@ -32,6 +49,9 @@ interface UiState {
   /** Module the camera is parked on for a close look. */
   inspectId: string | null;
   setInspect: (id: string | null) => void;
+  /** Bloom, depth of field and vignette. Off for a machine that struggles with them. */
+  effects: boolean;
+  toggleEffects: () => void;
   /** The campaign screen. */
   film: boolean;
   toggleFilm: () => void;
@@ -167,6 +187,12 @@ export const useGame = create<GameStore>((set, get) => ({
   },
   inspectId: null,
   setInspect: (inspectId) => set(inspectId ? { inspectId, selectedId: inspectId } : { inspectId: null }),
+  effects: readFlag("ultimo-taglio-effetti", true),
+  toggleEffects: () => {
+    const effects = !get().effects;
+    writeFlag("ultimo-taglio-effetti", effects);
+    set({ effects });
+  },
   film: false,
   toggleFilm: () => set({ film: !get().film }),
   codePad: ["", "", "", ""],

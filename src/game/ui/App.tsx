@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Scan,
   Scissors,
+  Sparkles,
   Stethoscope,
   Sun,
   Tag,
@@ -210,11 +211,11 @@ function Header() {
       </div>
       <div className="ml-auto flex items-center gap-2">
         {phase === "play" && (
-          <div className="hidden items-center gap-1 lg:flex">
+          <div className="hidden items-center gap-1 xl:flex">
             {list.map((stage) => (
               <span
                 key={stage.id}
-                className={`rounded-sm border px-2 py-1 text-xs ${stage.done ? "border-ok text-ok" : "border-line text-faint"}`}
+                className={`whitespace-nowrap rounded-sm border px-1.5 py-1 text-[11px] ${stage.done ? "border-ok text-ok" : "border-line text-faint"}`}
               >
                 {stage.label}
               </span>
@@ -328,6 +329,8 @@ function ViewButtons({ disabled }: { disabled: boolean }) {
   const xray = useGame((s) => s.xray);
   const exploded = useGame((s) => s.exploded);
   const dispatch = useGame((s) => s.dispatch);
+  const effects = useGame((s) => s.effects);
+  const toggleEffects = useGame((s) => s.toggleEffects);
   return (
     <>
       <RailButton label="Ultravioletto" active={uv} disabled={disabled} onClick={() => dispatch({ type: "toggle", key: "uv" })}>
@@ -350,6 +353,9 @@ function ViewButtons({ disabled }: { disabled: boolean }) {
       </RailButton>
       <RailButton label="Camera" disabled={disabled} onClick={() => emitView("reset")}>
         <RotateCcw className="size-4" />
+      </RailButton>
+      <RailButton label={effects ? "Effetti di lente: accesi" : "Effetti di lente: spenti"} active={effects} onClick={toggleEffects}>
+        <Sparkles className="size-4" />
       </RailButton>
     </>
   );

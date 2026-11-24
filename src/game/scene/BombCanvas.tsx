@@ -1,6 +1,8 @@
 import { Environment, Lightformer, OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Bloom, DepthOfField, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
+import { ToneMappingMode } from "postprocessing";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
@@ -9,8 +11,9 @@ import { Device, inspectPoint } from "./Device";
 export function BombCanvas() {
   return (
     <Canvas
-      shadows
-      dpr={[1, 1.75]}
+      // three no longer ships the old soft variant: its plain PCF map is the filtered one now.
+      shadows="percentage"
+      dpr={[1, 2]}
       camera={{ position: [1.85, 1.45, 2.35], fov: 34, near: 0.08, far: 40 }}
       gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping }}
       onCreated={({ gl }) => {
@@ -30,7 +33,31 @@ export function BombCanvas() {
       <Controls />
       <Clock />
       <Maneggio />
+      <Effects />
     </Canvas>
+  );
+}
+
+/**
+ * Lens work: lamps and the LCD bleed light, the frame darkens toward the corners, and a
+ * close look throws everything but the inspected part out of focus. With the composer
+ * running the renderer no longer tone-maps, so the last pass does it.
+ */
+function Effects() {
+  const on = useGame((s) => s.effects);
+  const bomb = useGame((s) => s.bomb);
+  const inspectId = useGame((s) => s.inspectId);
+  const exploded = useGame((s) => s.exploded);
+  const focus = useMemo(() => (bomb && inspectId ? inspectPoint(bomb, inspectId, exploded) : null), [bomb, inspectId, exploded]);
+  if (!on) return null;
+  return (
+    <EffectComposer multisampling={4}>
+      {focus ? <DepthOfField target={focus} worldFocusRange={0.55} bokehScale={3.2} resolutionScale={0.5} /> : <></>}
+      {/* Threshold well above white: only lamps, the filament and the displays bleed, not lit leather. */}
+      <Bloom mipmapBlur luminanceThreshold={1.7} luminanceSmoothing={0.2} intensity={0.6} radius={0.68} />
+      <Vignette offset={0.22} darkness={0.62} />
+      <ToneMapping mode={ToneMappingMode.NEUTRAL} />
+    </EffectComposer>
   );
 }
 
@@ -47,15 +74,31 @@ function Lights() {
         position={[4.2, 7.2, 2.6]}
         intensity={2.6 * dim}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
         shadow-camera-far={18}
-        shadow-camera-left={-4}
-        shadow-camera-right={4}
-        shadow-camera-top={4}
-        shadow-camera-bottom={-4}
+        // The frustum hugs the table: the same map covers a quarter of the area it used to.
+        shadow-camera-left={-2.4}
+        shadow-camera-right={2.4}
+        shadow-camera-top={2.4}
+        shadow-camera-bottom={-2.4}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.02}
+        shadow-radius={4}
       />
-      <spotLight position={[-2.4, 3.6, 1.6]} angle={0.62} penumbra={0.65} intensity={24 * dim} color={"#ffd2a8"} castShadow />
+      <spotLight
+        position={[-2.4, 3.6, 1.6]}
+        angle={0.62}
+        penumbra={0.65}
+        intensity={24 * dim}
+        color={"#ffd2a8"}
+        castShadow
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.0004}
+        shadow-normalBias={0.02}
+        shadow-radius={5}
+      />
       <pointLight position={[0.15, 0.55, 0.1]} color={"#e23b2b"} intensity={2.2 * dim} distance={4.2} />
       <pointLight position={[-1.2, 0.8, -1.1]} color={"#ffb020"} intensity={0.6 * dim} distance={5} />
       {uv && <pointLight position={[0.4, 1.6, 1.2]} color={"#8a5cff"} intensity={9} distance={7} />}
