@@ -5,26 +5,20 @@ import { formatClock } from "../logic";
 import { colorHex } from "../palette";
 import { useGame } from "../store";
 import type { Bomb, Module, Vec3, Wire } from "../types";
-import { createLcd, drawLcd } from "./lcd";
+import {
+  BatteryModule,
+  CapModule,
+  DetonatorModule,
+  DialModule,
+  HarnessModule,
+  KeypadModule,
+  LedsModule,
+  ReceiverModule,
+  TiltModule,
+  TimerModule,
+} from "./Modules";
+import { paint } from "./paint";
 import { CASE, ValigettaModel } from "./Valigetta";
-
-const texCache = new Map<string, THREE.CanvasTexture>();
-
-function paint(key: string, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void) {
-  const hit = texCache.get(key);
-  if (hit) return hit;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("canvas");
-  draw(ctx);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  texCache.set(key, tex);
-  return tex;
-}
 
 function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | null {
   for (const mod of bomb.modules) {
@@ -237,17 +231,17 @@ function ModuleMesh({ mod }: { mod: Module }) {
         dispatch({ type: "pointer-part", id: mod.id });
       }}
     >
-      {mod.kind === "timer" && <TimerMesh selected={selected} />}
-      {mod.kind === "battery" && <BatteryMesh selected={selected} />}
-      {mod.kind === "detonator" && <DetonatorMesh selected={selected} />}
-      {mod.kind === "cap" && <CapMesh selected={selected} />}
-      {mod.kind === "keypad" && <KeypadMesh selected={selected} />}
-      {mod.kind === "tilt" && <TiltMesh selected={selected} />}
-      {mod.kind === "receiver" && <ReceiverMesh selected={selected} />}
-      {mod.kind === "leds" && <LedsMesh selected={selected} />}
-      {mod.kind === "dial" && <DialMesh selected={selected} />}
+      {mod.kind === "timer" && <TimerModule selected={selected} />}
+      {mod.kind === "battery" && <BatteryModule selected={selected} />}
+      {mod.kind === "detonator" && <DetonatorModule selected={selected} />}
+      {mod.kind === "cap" && <CapModule selected={selected} />}
+      {mod.kind === "keypad" && <KeypadModule selected={selected} />}
+      {mod.kind === "tilt" && <TiltModule selected={selected} />}
+      {mod.kind === "receiver" && <ReceiverModule selected={selected} />}
+      {mod.kind === "leds" && <LedsModule selected={selected} />}
+      {mod.kind === "dial" && <DialModule selected={selected} />}
       {mod.kind === "plate" && <PlateMesh selected={selected} />}
-      {mod.kind === "harness" && <HarnessMesh selected={selected} />}
+      {mod.kind === "harness" && <HarnessModule selected={selected} />}
       {mod.terminals.map((t) => (
         <Post key={t.id} id={t.id} position={t.local} />
       ))}
@@ -290,7 +284,7 @@ function Post({ id, position, rotation }: { id: string; position: Vec3; rotation
         dispatch({ type: "pointer-terminal", id });
       }}
     >
-      <cylinderGeometry args={[0.045, 0.05, 0.09, 12]} />
+      <cylinderGeometry args={[0.03, 0.034, 0.075, 14]} />
       <meshStandardMaterial
         color={pending ? "#ffb020" : "#e6e0d4"}
         emissive={pending ? "#ffb020" : "#000000"}
@@ -299,323 +293,6 @@ function Post({ id, position, rotation }: { id: string; position: Vec3; rotation
         roughness={0.22}
       />
     </mesh>
-  );
-}
-
-function TimerMesh({ selected }: { selected: boolean }) {
-  const seconds = useGame((s) => s.secondsLeft);
-  const dead = useGame((s) => s.displayDead);
-  const phase = useGame((s) => s.phase);
-  const mode = useGame((s) => s.mode);
-  const { canvas, tex } = useMemo(() => createLcd(), []);
-  const text =
-    phase === "boot" || seconds <= 0
-      ? "8888"
-      : `${String(Math.floor(Math.max(0, Math.ceil(seconds)) / 60)).padStart(2, "0")}${String(
-          Math.max(0, Math.ceil(seconds)) % 60,
-        ).padStart(2, "0")}`;
-  useEffect(() => {
-    const tone = dead ? "dead" : phase === "safe" ? "safe" : mode === "prova" ? "idle" : "arm";
-    drawLcd(canvas, phase === "boot" ? "8888" : formatClock(seconds).replace(":", ""), tone);
-    tex.needsUpdate = true;
-  }, [canvas, tex, seconds, dead, phase, mode]);
-  useEffect(() => () => tex.dispose(), [tex]);
-  const led = useRef<THREE.MeshStandardMaterial>(null);
-  useFrame(({ clock }) => {
-    if (!led.current) return;
-    const urgent = phase === "play" && mode === "ripresa" && seconds <= 15;
-    const speed = urgent ? 10 : 2.4;
-    led.current.emissiveIntensity = phase === "safe" ? 0.15 : 0.35 + Math.sin(clock.elapsedTime * speed) * 0.35;
-  });
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.08, 0]}>
-        <boxGeometry args={[0.78, 0.16, 0.42]} />
-        <Mat color="#161412" selected={selected} metal={0.4} rough={0.5} />
-      </mesh>
-      <mesh position={[0, 0.17, 0.02]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.52, 0.2]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
-      </mesh>
-      <mesh position={[-0.3, 0.17, 0.14]}>
-        <sphereGeometry args={[0.025, 10, 10]} />
-        <meshStandardMaterial ref={led} color="#3a1010" emissive="#e23b2b" emissiveIntensity={0.8} toneMapped={false} />
-      </mesh>
-      <Silk title="TEMPO" sub="LCD DI SCENA" y={0.175} z={-0.14} w={0.28} h={0.08} />
-    </group>
-  );
-}
-
-function BatteryMesh({ selected }: { selected: boolean }) {
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.09, 0]}>
-        <boxGeometry args={[0.46, 0.18, 0.28]} />
-        <Mat color="#1e2420" selected={selected} />
-      </mesh>
-      <mesh position={[0, 0.09, 0.145]}>
-        <boxGeometry args={[0.36, 0.1, 0.01]} />
-        <meshStandardMaterial color="#d6e38a" />
-      </mesh>
-      <mesh position={[0.08, 0.09, 0.15]}>
-        <boxGeometry args={[0.08, 0.1, 0.012]} />
-        <meshStandardMaterial color="#1e2420" />
-      </mesh>
-      <Silk title="CELLA" sub="PALCO 9V" y={0.19} />
-    </group>
-  );
-}
-
-function DetonatorMesh({ selected }: { selected: boolean }) {
-  const filament = useRef<THREE.MeshStandardMaterial>(null);
-  const lamp = useRef<THREE.MeshStandardMaterial>(null);
-  const glow = useRef<THREE.PointLight>(null);
-  const xray = useGame((s) => s.xray);
-  useFrame(({ clock }) => {
-    const st = useGame.getState();
-    const heat = st.phase === "play" ? st.bridge : st.phase === "boom" ? 1 : 0;
-    const pulse = st.bridgeHot ? 0.82 + Math.sin(clock.elapsedTime * 14) * 0.18 : 1;
-    if (filament.current) {
-      filament.current.emissiveIntensity = (0.15 + heat * 3.4) * pulse;
-      filament.current.emissive.set(heat > 0.55 ? "#ff2a1a" : "#ffb020");
-    }
-    if (lamp.current) {
-      const held = st.phase === "play" && !st.bridgeHot;
-      lamp.current.emissiveIntensity = held ? 1.6 : st.bridgeHot ? (Math.sin(clock.elapsedTime * 18) > 0 ? 1.8 : 0.15) : 0.05;
-    }
-    if (glow.current) glow.current.intensity = heat * pulse * 2.2;
-  });
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.06, 0]}>
-        <boxGeometry args={[0.42, 0.08, 0.28]} />
-        <Mat color="#2a2826" selected={selected} />
-      </mesh>
-      <mesh castShadow position={[0, 0.14, -0.02]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.058, 0.058, 0.3, 20]} />
-        <meshStandardMaterial color="#4a1816" roughness={0.45} metalness={0.55} />
-      </mesh>
-      <mesh position={[0, 0.14, 0.02]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.045, 0.045, 0.22, 16]} />
-        <meshPhysicalMaterial
-          color="#2a0908"
-          transparent
-          opacity={xray ? 0.18 : 0.55}
-          roughness={0.12}
-          metalness={0.05}
-          transmission={0.35}
-          thickness={0.04}
-        />
-      </mesh>
-      <mesh position={[0, 0.14, -0.02]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.008, 0.008, 0.2, 8]} />
-        <meshStandardMaterial ref={filament} color="#3a2418" emissive="#ffb020" emissiveIntensity={0.4} toneMapped={false} />
-      </mesh>
-      <mesh position={[0.16, 0.14, -0.02]}>
-        <sphereGeometry args={[0.018, 10, 10]} />
-        <meshStandardMaterial ref={lamp} color="#102018" emissive="#7dce6a" emissiveIntensity={1.4} toneMapped={false} />
-      </mesh>
-      <pointLight ref={glow} position={[0, 0.2, 0.05]} color="#ff6a2a" intensity={0.3} distance={1.4} />
-      <mesh position={[0, 0.14, -0.02]}>
-        <boxGeometry args={[0.3, 0.02, 0.08]} />
-        <meshStandardMaterial color="#cfc6b4" metalness={0.7} roughness={0.3} />
-      </mesh>
-      <Silk title="INNESCO" sub="PONTE" y={0.24} />
-    </group>
-  );
-}
-
-function CapMesh({ selected }: { selected: boolean }) {
-  const dumped = useGame((s) => s.capDumped);
-  return (
-    <group>
-      <mesh castShadow position={[-0.02, 0.1, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.07, 0.07, 0.28, 16]} />
-        <Mat color="#c4552a" selected={selected} metal={0.35} rough={0.45} />
-      </mesh>
-      <mesh position={[0.02, 0.1, 0]}>
-        <boxGeometry args={[0.05, 0.09, 0.16]} />
-        <meshStandardMaterial color="#e2b43a" />
-      </mesh>
-      <mesh position={[0.2, 0.07, 0.06]} castShadow>
-        <boxGeometry args={[0.16, 0.1, 0.12]} />
-        <meshStandardMaterial color="#2c4a38" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 0.16, 0]}>
-        <sphereGeometry args={[0.02, 8, 8]} />
-        <meshStandardMaterial
-          color={dumped ? "#355" : "#ffb020"}
-          emissive={dumped ? "#000" : "#ffb020"}
-          emissiveIntensity={dumped ? 0 : 1.4}
-          toneMapped={false}
-        />
-      </mesh>
-      <Silk title="SCARICA" sub="CARICO FITTIZIO" y={0.2} z={-0.12} w={0.36} h={0.08} />
-    </group>
-  );
-}
-
-function KeypadMesh({ selected }: { selected: boolean }) {
-  const dispatch = useGame((s) => s.dispatch);
-  const entry = useGame((s) => s.keypad);
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "OK"];
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.05, 0]}>
-        <boxGeometry args={[0.46, 0.1, 0.42]} />
-        <Mat color="#17191c" selected={selected} />
-      </mesh>
-      {keys.map((key, i) => {
-        const col = i % 3;
-        const row = Math.floor(i / 3);
-        return (
-          <mesh
-            key={key}
-            position={[-0.12 + col * 0.12, 0.11, -0.12 + row * 0.09]}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatch({ type: "keypad", key: key === "OK" ? "OK" : key });
-            }}
-          >
-            <boxGeometry args={[0.09, 0.025, 0.07]} />
-            <meshStandardMaterial color={key === "OK" ? "#8d241c" : "#2a2e33"} metalness={0.4} roughness={0.45} />
-          </mesh>
-        );
-      })}
-      <DigitReadout text={entry.padEnd(4, "·")} y={0.12} z={-0.2} />
-    </group>
-  );
-}
-
-function TiltMesh({ selected }: { selected: boolean }) {
-  const dispatch = useGame((s) => s.dispatch);
-  const bead = useRef<THREE.Mesh>(null);
-  useFrame(() => {
-    const a = useGame.getState().attitude;
-    if (bead.current) bead.current.position.x = Math.max(-0.1, Math.min(0.1, a.z * 0.45));
-  });
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.05, 0]}>
-        <boxGeometry args={[0.42, 0.08, 0.18]} />
-        <Mat color="#242220" selected={selected} />
-      </mesh>
-      <mesh position={[0, 0.12, 0]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.035, 0.035, 0.32, 12]} />
-        <meshPhysicalMaterial color="#d5e7ee" transparent opacity={0.45} roughness={0.08} metalness={0.05} />
-      </mesh>
-      <mesh ref={bead} position={[0, 0.12, 0]}>
-        <sphereGeometry args={[0.028, 12, 12]} />
-        <meshStandardMaterial color="#d9d3c6" metalness={0.8} roughness={0.2} />
-      </mesh>
-      <mesh
-        position={[0.18, 0.1, 0]}
-        onClick={(e) => {
-          e.stopPropagation();
-          dispatch({ type: "pointer-tilt" });
-        }}
-      >
-        <cylinderGeometry args={[0.03, 0.03, 0.04, 8]} />
-        <meshStandardMaterial color="#b7b1a4" metalness={0.85} roughness={0.3} />
-      </mesh>
-      <Silk title="GRANO" sub="BLOCCO" y={0.16} z={0.1} w={0.24} h={0.07} />
-    </group>
-  );
-}
-
-function ReceiverMesh({ selected }: { selected: boolean }) {
-  const led = useRef<THREE.MeshStandardMaterial>(null);
-  const blink = useGame((s) => Number(s.bomb?.code[2] ?? 3));
-  useFrame(({ clock }) => {
-    if (!led.current) return;
-    const span = 0.22 * blink + 0.55;
-    const t = clock.elapsedTime % span;
-    const slot = 0.22;
-    const index = Math.floor(t / slot);
-    const on = index < blink && t % slot < 0.1;
-    led.current.emissiveIntensity = on ? 2.4 : 0.05;
-  });
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.06, 0]}>
-        <boxGeometry args={[0.36, 0.12, 0.24]} />
-        <Mat color="#20242a" selected={selected} />
-      </mesh>
-      <mesh position={[-0.05, 0.28, -0.04]} rotation={[0.15, 0, 0.1]}>
-        <cylinderGeometry args={[0.012, 0.012, 0.42, 8]} />
-        <meshStandardMaterial color="#d5d0c6" metalness={0.8} roughness={0.25} />
-      </mesh>
-      <mesh position={[0.12, 0.14, 0.08]}>
-        <sphereGeometry args={[0.025, 10, 10]} />
-        <meshStandardMaterial ref={led} color="#1a1208" emissive="#ffb020" emissiveIntensity={0.4} toneMapped={false} />
-      </mesh>
-      <Silk title="RX" sub="COPIONE" y={0.14} z={-0.08} w={0.22} h={0.07} />
-    </group>
-  );
-}
-
-function LedsMesh({ selected }: { selected: boolean }) {
-  const count = useGame((s) => s.bomb?.ledBlink ?? 4);
-  const blind = useGame((s) => s.ledsBlind);
-  const mats = useRef<(THREE.MeshStandardMaterial | null)[]>([]);
-  useFrame(({ clock }) => {
-    const span = 0.18 * count + 0.45;
-    const t = clock.elapsedTime % span;
-    const index = Math.floor(t / 0.18);
-    mats.current.forEach((m, i) => {
-      if (!m) return;
-      const on = !blind && index < count && i === index % 6 && t % 0.18 < 0.1;
-      m.emissiveIntensity = on ? 2.6 : 0.04;
-    });
-  });
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.05, 0]}>
-        <boxGeometry args={[0.62, 0.1, 0.2]} />
-        <Mat color="#141618" selected={selected} />
-      </mesh>
-      {Array.from({ length: 6 }, (_, i) => (
-        <mesh key={i} position={[-0.22 + i * 0.09, 0.12, 0]}>
-          <sphereGeometry args={[0.028, 10, 10]} />
-          <meshStandardMaterial
-            ref={(node) => {
-              mats.current[i] = node;
-            }}
-            color="#102018"
-            emissive="#d6e38a"
-            emissiveIntensity={0.05}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-function DialMesh({ selected }: { selected: boolean }) {
-  const digits = useGame((s) => s.dialDigits);
-  const dispatch = useGame((s) => s.dispatch);
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.05, 0]}>
-        <boxGeometry args={[0.5, 0.1, 0.24]} />
-        <Mat color="#2a241c" selected={selected} />
-      </mesh>
-      {digits.map((n, i) => (
-        <group key={i} position={[-0.14 + i * 0.14, 0.12, 0]}>
-          <mesh
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatch({ type: "dial", index: i as 0 | 1 | 2, dir: 1 });
-            }}
-          >
-            <cylinderGeometry args={[0.05, 0.05, 0.04, 16]} />
-            <meshStandardMaterial color="#111" metalness={0.5} roughness={0.4} />
-          </mesh>
-          <DigitReadout text={String(n)} y={0.05} z={0} />
-        </group>
-      ))}
-    </group>
   );
 }
 
@@ -648,21 +325,6 @@ function PlateMesh({ selected }: { selected: boolean }) {
       <mesh position={[0, 0.065, 0]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.84, 0.24]} />
         <meshBasicMaterial map={map} toneMapped={false} />
-      </mesh>
-    </group>
-  );
-}
-
-function HarnessMesh({ selected }: { selected: boolean }) {
-  return (
-    <group>
-      <mesh castShadow position={[0, 0.04, 0]}>
-        <boxGeometry args={[1.15, 0.06, 0.22]} />
-        <Mat color="#1a1c1e" selected={selected} />
-      </mesh>
-      <mesh position={[0, 0.08, 0]}>
-        <boxGeometry args={[1.05, 0.02, 0.08]} />
-        <meshStandardMaterial color="#3a342c" />
       </mesh>
     </group>
   );

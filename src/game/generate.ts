@@ -267,23 +267,24 @@ function buildModules(gates: Gates, wires: Wire[]): Module[] {
   }
   const ordered = [...ids].sort((a, b) => a.localeCompare(b, "it"));
   ordered.forEach((id, i) => {
-    const x = -0.48 + (i * 0.96) / Math.max(1, ordered.length - 1);
+    const x = -0.44 + (i * 0.88) / Math.max(1, ordered.length - 1);
     const joint = /^j\d+$/.test(id);
-    harnessTerms.push(term(id, [x, joint ? 0.2 : 0.1, joint ? -0.02 : 0.08]));
+    // Two rows on the brass rail: joints behind, bus ends in front.
+    harnessTerms.push(term(id, [x, 0.095, joint ? -0.035 : 0.035]));
   });
 
   const list: Module[] = [
-    mod("timer", "Timer LCD", [term("timer-vin", [0.28, 0.12, 0.16])]),
+    mod("timer", "Timer LCD", [term("timer-vin", [-0.3, 0.2, 0.165])]),
     mod("harness", "Cablaggio di scena", harnessTerms),
     mod("battery", "Cella di palco", [
-      term("bat-pos", [0.16, 0.16, 0.08]),
-      term("bat-neg", [-0.16, 0.16, 0.08]),
+      term("bat-pos", [0.115, 0.22, -0.01]),
+      term("bat-neg", [-0.115, 0.22, -0.01]),
     ]),
     mod("detonator", "Innesco di scena", [
-      term("det-in", [0.1, 0.18, 0.12]),
-      term("det-inhibit", [-0.12, 0.18, 0.08]),
+      term("det-in", [0.13, 0.06, 0.105]),
+      term("det-inhibit", [-0.13, 0.06, 0.105]),
     ]),
-    mod("leds", "Cluster lampeggi", [term("led-in", [0.22, 0.1, 0.1])]),
+    mod("leds", "Cluster lampeggi", [term("led-in", [0.285, 0.1, 0.062])]),
     mod("keypad", "Tastierino di scena", []),
     mod("plate", "Piatto inciso", []),
   ];
@@ -291,13 +292,13 @@ function buildModules(gates: Gates, wires: Wire[]): Module[] {
   if (gates.cap) {
     list.push(
       mod("cap", "Condensatore di scena", [
-        term("cap-hot", [-0.06, 0.16, 0.1]),
-        term("cap-load", [0.22, 0.12, 0.14]),
+        term("cap-hot", [-0.1, 0.045, 0.095]),
+        term("cap-load", [0.16, 0.045, 0.095]),
       ]),
     );
   }
   if (gates.tilt) list.push(mod("tilt", "Grano d'inclinazione", []));
-  if (gates.receiver) list.push(mod("receiver", "Ricevitore di copione", [term("rx-out", [0.16, 0.12, 0.1])]));
+  if (gates.receiver) list.push(mod("receiver", "Ricevitore di copione", [term("rx-out", [0.13, 0.15, 0.07])]));
   if (gates.dial) list.push(mod("dial", "Contatore B", []));
 
   return list;
