@@ -18,6 +18,7 @@ import {
   TiltModule,
   TimerModule,
 } from "./Modules";
+import { touch } from "./Hand";
 import { paint } from "./paint";
 import { CASE, ValigettaModel } from "./Valigetta";
 
@@ -51,6 +52,7 @@ export function Device() {
         <ModuleMesh key={mod.id} mod={mod} />
       ))}
       <HarnessWires />
+      <Planted />
       <UvMark />
     </Attitude>
   );
@@ -80,7 +82,11 @@ export function inspectPoint(bomb: Bomb, id: string, exploded: boolean): THREE.V
 /** Pointer handlers that report what is under the cursor and show a hand over it. */
 function hoverHandlers(id: string) {
   return {
+    // Entering stops the event so only the nearest part reads as hovered; that also keeps it from
+    // the set's own tracker, so the hand is told here where the tool tip is.
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => touch(e.point),
     onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      touch(e.point);
       e.stopPropagation();
       useGame.getState().setHover(id);
       document.body.style.cursor = "pointer";
@@ -518,6 +524,65 @@ function UvMark() {
   );
 }
 
+/** The first probe, or the first crocodile clip, stays on its post while the hand goes for the second. */
+function Planted() {
+  const bomb = useGame((s) => s.bomb);
+  const exploded = useGame((s) => s.exploded);
+  const probe = useGame((s) => s.probeA);
+  const clip = useGame((s) => s.pendingJumper);
+  const id = probe ?? clip;
+  const at = bomb && id ? pointOf(bomb, id, exploded) : null;
+  if (!at) return null;
+  return (
+    <group position={[at.x, at.y + 0.04, at.z]} rotation={[0.25, 0, -0.35]}>
+      <mesh position={[0, 0.03, 0]}>
+        <coneGeometry args={[0.004, 0.06, 10]} />
+        <meshStandardMaterial color="#c9c6bf" metalness={0.92} roughness={0.24} />
+      </mesh>
+      <mesh position={[0, 0.14, 0]} castShadow>
+        <capsuleGeometry args={[0.01, 0.14, 6, 12]} />
+        <meshStandardMaterial color={probe ? "#1d1b19" : "#c9d46a"} roughness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+/** A short burst of sparks where the cutters closed. Plays once, when the cut wire first appears. */
+function Sparks({ at }: { at: THREE.Vector3 }) {
+  const group = useRef<THREE.Group>(null);
+  const born = useRef<number | null>(null);
+  const bits = useMemo(
+    () =>
+      Array.from({ length: 14 }, () => ({
+        v: new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.9 + 0.25, Math.random() - 0.5).multiplyScalar(0.9),
+      })),
+    [],
+  );
+  useFrame(({ clock }) => {
+    const g = group.current;
+    if (!g) return;
+    born.current ??= clock.elapsedTime;
+    const t = clock.elapsedTime - born.current;
+    g.visible = t < 0.55;
+    if (!g.visible) return;
+    g.children.forEach((child, i) => {
+      const v = bits[i]!.v;
+      child.position.set(v.x * t, v.y * t - 2.2 * t * t, v.z * t);
+      child.scale.setScalar(Math.max(0.05, 1 - t / 0.55));
+    });
+  });
+  return (
+    <group ref={group} position={at}>
+      {bits.map((_, i) => (
+        <mesh key={i}>
+          <sphereGeometry args={[0.006, 6, 6]} />
+          <meshBasicMaterial color={[6, 3.6, 1.2]} toneMapped={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 /**
  * A wire rises off its terminal, runs level over the modules and drops onto the other one,
  * instead of cutting straight through whatever stands in between. `lane` spreads wires
@@ -621,6 +686,7 @@ function HarnessWires() {
               </mesh>
             )}
             {item.index === 0 && item.wire.diode && !item.cut && <DiodeBead wire={item.wire} path={item.path} />}
+            {item.index === 0 && item.cut && <Sparks at={item.path.getPoint(0.5)} />}
           </group>
         );
       })}

@@ -72,3 +72,22 @@ export function boom() {
   src.start(t);
   tone(90, 0.4, "sine", 0.2, -50);
 }
+
+/** Cutters closing on a wire: a bright bite, then the duller knock of the jaws meeting. */
+export function snip() {
+  unlockAudio();
+  tone(2600, 0.016, "square", 0.05);
+  setTimeout(() => tone(700, 0.035, "triangle", 0.07, -300), 22);
+}
+
+/** The meter settling on a reading. */
+export function blip() {
+  unlockAudio();
+  tone(1320, 0.03, "sine", 0.05);
+}
+
+/** A crocodile clip biting a post. */
+export function clamp() {
+  unlockAudio();
+  tone(420, 0.025, "triangle", 0.07);
+}

@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
 import { Device, inspectPoint } from "./Device";
+import { HandSurface, ToolInHand } from "./Hand";
 
 export function BombCanvas() {
   return (
@@ -24,12 +25,15 @@ export function BombCanvas() {
       <color attach="background" args={["#100e0c"]} />
       <fog attach="fog" args={["#100e0c", 7.5, 16]} />
       <Lights />
-      <Room />
-      <Shake>
-        <Suspense fallback={null}>
-          <Device />
-        </Suspense>
-      </Shake>
+      <HandSurface>
+        <Room />
+        <Shake>
+          <Suspense fallback={null}>
+            <Device />
+          </Suspense>
+        </Shake>
+      </HandSurface>
+      <ToolInHand />
       <Controls />
       <Clock />
       <Maneggio />

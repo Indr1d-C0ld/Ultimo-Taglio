@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { beep, boom, setMuted, unlockAudio, win } from "./audio";
+import { beep, blip, boom, clamp, setMuted, snip, unlockAudio, win } from "./audio";
 import { initialState, reduce } from "./logic";
 import {
   activeProfile,
@@ -157,6 +157,9 @@ export const useGame = create<GameStore>((set, get) => ({
     if (prev.phase === "play" && next.phase === "boom") fx.shake = 0.28;
     if (prev.phase === "play" && next.phase === "safe") fx.shake = 0.06;
     if (prev.sound) {
+      if (next.cutIds.length > prev.cutIds.length) snip();
+      if (next.tally.probes > prev.tally.probes) blip();
+      if (next.jumpers.length > prev.jumpers.length) clamp();
       if (prev.phase === "play" && next.phase === "boom") boom();
       else if (prev.phase === "play" && next.phase === "safe") win();
       else if (
