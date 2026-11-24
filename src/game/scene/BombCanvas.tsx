@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
-import { Device } from "./Device";
+import { Device, inspectPoint } from "./Device";
 
 export function BombCanvas() {
   return (
@@ -139,36 +139,77 @@ function Maneggio() {
   return null;
 }
 
+const HOME = { target: new THREE.Vector3(0, 0.05, 0), eye: new THREE.Vector3(1.85, 1.45, 2.35) };
+
+/** Width of the modules that are wider than the common small footprint. */
+const FOOTPRINT: Partial<Record<string, number>> = { harness: 1.15, plate: 0.9, timer: 0.78, leds: 0.62 };
+
 function Controls() {
   const tool = useGame((s) => s.tool);
   const phase = useGame((s) => s.phase);
+  const inspectId = useGame((s) => s.inspectId);
+  const exploded = useGame((s) => s.exploded);
   const camera = useThree((s) => s.camera);
   const controls = useRef<OrbitControlsImpl>(null);
+  /** Where the camera is flying to; null once it has arrived or the player takes over. */
+  const flight = useRef<{ target: THREE.Vector3; eye: THREE.Vector3 } | null>(null);
+  const wasInspecting = useRef(false);
+
+  // Close look: fly in over the module, keeping the side the player was looking from.
+  useEffect(() => {
+    const c = controls.current;
+    const bomb = useGame.getState().bomb;
+    const point = inspectId && bomb ? inspectPoint(bomb, inspectId, exploded) : null;
+    if (point && c) {
+      const from = camera.position.clone().sub(c.target).setY(0);
+      if (from.lengthSq() < 1e-4) from.set(0, 0, 1);
+      // Stand back far enough to frame the whole module: the bus strip is three times a keypad.
+      const kind = bomb?.modules.find((m) => m.id === inspectId)?.kind;
+      const reach = 0.55 + (kind ? (FOOTPRINT[kind] ?? 0.46) : 0.46) * 1.05;
+      from.normalize().multiplyScalar(reach * 0.6);
+      flight.current = { target: point, eye: point.clone().add(new THREE.Vector3(from.x, reach * 0.8, from.z)) };
+      wasInspecting.current = true;
+    } else if (wasInspecting.current) {
+      flight.current = { target: HOME.target.clone(), eye: HOME.eye.clone() };
+      wasInspecting.current = false;
+    }
+  }, [inspectId, exploded, camera]);
+
+  useEffect(() => {
+    controls.current?.target.copy(HOME.target);
+    controls.current?.update();
+  }, []);
+
+  useFrame((_, delta) => {
+    const c = controls.current;
+    const goal = flight.current;
+    if (!c || !goal) return;
+    const k = 1 - Math.exp(-7 * Math.min(delta, 0.1));
+    c.target.lerp(goal.target, k);
+    camera.position.lerp(goal.eye, k);
+    c.update();
+    if (camera.position.distanceTo(goal.eye) < 0.004 && c.target.distanceTo(goal.target) < 0.004) flight.current = null;
+  });
 
   useEffect(() => {
     const onView = (event: Event) => {
       const type = (event as CustomEvent<string>).detail;
       const c = controls.current;
       if (!c) return;
+      const st = useGame.getState();
       if (type === "reset") {
-        c.target.set(0, 0.05, 0);
-        camera.position.set(1.85, 1.45, 2.35);
+        if (st.inspectId) st.setInspect(null);
+        else flight.current = { target: HOME.target.clone(), eye: HOME.eye.clone() };
       } else if (type === "zoom-in" || type === "zoom-out") {
+        flight.current = null;
         const offset = camera.position.clone().sub(c.target);
         offset.multiplyScalar(type === "zoom-in" ? 0.82 : 1.2);
         const dist = offset.length();
-        if (dist > 1.05 && dist < 9) camera.position.copy(c.target.clone().add(offset));
+        if (dist > 0.4 && dist < 9) camera.position.copy(c.target.clone().add(offset));
+        c.update();
       } else if (type === "focus") {
-        const st = useGame.getState();
-        const mod = st.bomb?.modules.find((m) => m.id === st.selectedId);
-        if (mod) {
-          const e = st.exploded ? mod.explode : [0, 0, 0];
-          c.target.set(mod.position[0] + e[0], 0.12 + e[1], mod.position[2] + e[2]);
-        } else if (st.selectedId?.startsWith("w")) {
-          c.target.set(0, 0.2, 0);
-        }
+        if (st.bomb?.modules.some((m) => m.id === st.selectedId)) st.setInspect(st.selectedId);
       }
-      c.update();
     };
     window.addEventListener("ut-view", onView);
     return () => window.removeEventListener("ut-view", onView);
@@ -179,11 +220,14 @@ function Controls() {
       ref={controls}
       enabled={!(tool === "maneggio" && phase === "play")}
       enablePan
-      minDistance={1.15}
+      // A drag or a pinch always wins over a flight in progress.
+      onStart={() => {
+        flight.current = null;
+      }}
+      minDistance={inspectId ? 0.3 : 1.15}
       maxDistance={8.5}
       maxPolarAngle={Math.PI * 0.92}
       minPolarAngle={0.18}
-      target={[0, 0.05, 0]}
     />
   );
 }

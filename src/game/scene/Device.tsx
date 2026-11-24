@@ -1,8 +1,9 @@
-import { useFrame } from "@react-three/fiber";
+import { Billboard } from "@react-three/drei";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { formatClock } from "../logic";
-import { colorHex } from "../palette";
+import { colorHex, terminalLabel } from "../palette";
 import { useGame } from "../store";
 import type { Bomb, Module, Vec3, Wire } from "../types";
 import {
@@ -57,7 +58,39 @@ export function Device() {
 
 /** Height of the bench group over the room origin. The table top sits at −0.255. */
 const TABLE_Y = -0.255;
-const BENCH_Y = { valigetta: TABLE_Y - CASE.bottomY, cilindro: -0.08, console: -0.08 } as const;
+export const BENCH_Y = { valigetta: TABLE_Y - CASE.bottomY, cilindro: -0.08, console: -0.08 } as const;
+
+/** Where a module sits on the bench, in bench space. */
+function moduleHome(bomb: Bomb, mod: Module, exploded: boolean): Vec3 {
+  const onCase = bomb.archetype === "valigetta" && mod.kind === "plate";
+  // On the case the plate is riveted upright to the front wall instead of lying on the bench.
+  const home: Vec3 = onCase ? [0, CASE.wallMidY, CASE.frontZ - 0.018] : mod.position;
+  const extra = exploded ? mod.explode : [0, 0, 0];
+  return [home[0] + extra[0]!, home[1] + extra[1]!, home[2] + extra[2]!];
+}
+
+/** The point the camera should look at to inspect a module, in room space. */
+export function inspectPoint(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | null {
+  const mod = bomb.modules.find((m) => m.id === id);
+  if (!mod) return null;
+  const at = moduleHome(bomb, mod, exploded);
+  return new THREE.Vector3(at[0], at[1] + BENCH_Y[bomb.archetype] + 0.08, at[2]);
+}
+
+/** Pointer handlers that report what is under the cursor and show a hand over it. */
+function hoverHandlers(id: string) {
+  return {
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+      e.stopPropagation();
+      useGame.getState().setHover(id);
+      document.body.style.cursor = "pointer";
+    },
+    onPointerOut: () => {
+      if (useGame.getState().hoverId === id) useGame.getState().setHover(null);
+      document.body.style.cursor = "";
+    },
+  };
+}
 
 function Attitude({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
@@ -95,8 +128,8 @@ function Chassis() {
             <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
           </mesh>
         ))}
-        <Post id="sw-a" position={SW_POST.a} rotation={[Math.PI / 2, 0, 0]} />
-        <Post id="sw-b" position={SW_POST.b} rotation={[Math.PI / 2, 0, 0]} />
+        <Post id="sw-a" position={SW_POST.a} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
+        <Post id="sw-b" position={SW_POST.b} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
       </group>
     );
   }
@@ -212,24 +245,26 @@ function Cover({ open, children }: { open: boolean; children: React.ReactNode })
 }
 
 function ModuleMesh({ mod }: { mod: Module }) {
+  const bomb = useGame((s) => s.bomb);
   const exploded = useGame((s) => s.exploded);
   const selected = useGame((s) => s.selectedId === mod.id);
   const dispatch = useGame((s) => s.dispatch);
-  const pos = mod.position;
-  const extra = exploded ? mod.explode : [0, 0, 0];
-  const onCase = useGame((s) => s.bomb?.archetype === "valigetta") && mod.kind === "plate";
-  // On the case the plate is riveted upright to the front wall instead of lying on the bench.
-  const home: Vec3 = onCase ? [0, CASE.wallMidY, CASE.frontZ - 0.018] : pos;
-  const at: [number, number, number] = [home[0] + extra[0], home[1] + extra[1], home[2] + extra[2]];
+  if (!bomb) return null;
+  const upright = bomb.archetype === "valigetta" && mod.kind === "plate";
   return (
     <group
-      position={at}
-      rotation={onCase ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
-      scale={onCase ? 0.92 : 1}
+      position={moduleHome(bomb, mod, exploded)}
+      rotation={upright ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
+      scale={upright ? 0.92 : 1}
       onClick={(e) => {
         e.stopPropagation();
         dispatch({ type: "pointer-part", id: mod.id });
       }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        useGame.getState().setInspect(mod.id);
+      }}
+      {...hoverHandlers(`m:${mod.id}`)}
     >
       {mod.kind === "timer" && <TimerModule selected={selected} />}
       {mod.kind === "battery" && <BatteryModule selected={selected} />}
@@ -243,7 +278,7 @@ function ModuleMesh({ mod }: { mod: Module }) {
       {mod.kind === "plate" && <PlateMesh selected={selected} />}
       {mod.kind === "harness" && <HarnessModule selected={selected} />}
       {mod.terminals.map((t) => (
-        <Post key={t.id} id={t.id} position={t.local} />
+        <Post key={t.id} id={t.id} position={t.local} owner={mod.id} />
       ))}
     </group>
   );
@@ -271,28 +306,70 @@ function Mat({
   );
 }
 
-function Post({ id, position, rotation }: { id: string; position: Vec3; rotation?: Vec3 }) {
+function Post({ id, position, rotation, owner }: { id: string; position: Vec3; rotation?: Vec3; owner?: string }) {
   const dispatch = useGame((s) => s.dispatch);
   const pending = useGame((s) => s.probeA === id || s.pendingJumper === id);
+  const hovered = useGame((s) => s.hoverId === `t:${id}`);
+  // Lit when the pointer is on a wire that lands here: the wire shows where it goes.
+  const wired = useGame((s) => {
+    const key = s.hoverId?.startsWith("w:") ? s.hoverId.slice(2) : s.selectedId;
+    const wire = key ? s.bomb?.wires.find((w) => w.id === key) : undefined;
+    return !!wire && (wire.a === id || wire.b === id);
+  });
+  const named = useGame((s) => !!owner && s.inspectId === owner);
+  const lit = pending || hovered || wired;
+  const tone = pending ? "#ffb020" : hovered ? "#fff2c4" : "#ffd27a";
   return (
-    <mesh
-      position={position}
-      rotation={rotation}
-      castShadow
-      onClick={(e) => {
-        e.stopPropagation();
-        dispatch({ type: "pointer-terminal", id });
-      }}
-    >
-      <cylinderGeometry args={[0.03, 0.034, 0.075, 14]} />
-      <meshStandardMaterial
-        color={pending ? "#ffb020" : "#e6e0d4"}
-        emissive={pending ? "#ffb020" : "#000000"}
-        emissiveIntensity={pending ? 0.7 : 0}
-        metalness={0.9}
-        roughness={0.22}
-      />
-    </mesh>
+    <group position={position}>
+      <mesh
+        rotation={rotation}
+        castShadow
+        onClick={(e) => {
+          e.stopPropagation();
+          dispatch({ type: "pointer-terminal", id });
+        }}
+        {...hoverHandlers(`t:${id}`)}
+      >
+        <cylinderGeometry args={[0.03, 0.034, 0.075, 14]} />
+        <meshStandardMaterial
+          color={lit ? tone : "#e6e0d4"}
+          emissive={lit ? tone : "#000000"}
+          emissiveIntensity={pending ? 0.7 : lit ? 0.45 : 0}
+          metalness={0.9}
+          roughness={0.22}
+        />
+      </mesh>
+      {(lit || named) && <Tag text={terminalLabel(id)} />}
+    </group>
+  );
+}
+
+/** A small name plate that always faces the camera and is never hidden behind a part. */
+function Tag({ text }: { text: string }) {
+  const width = Math.max(0.09, text.length * 0.0175 + 0.03);
+  const map = useMemo(
+    () =>
+      paint(`tag-${text}`, 512, 96, (ctx) => {
+        ctx.fillStyle = "rgba(16,14,12,0.92)";
+        ctx.fillRect(0, 0, 512, 96);
+        ctx.strokeStyle = "#ffb020";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(2, 2, 508, 92);
+        ctx.fillStyle = "#f4efe6";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = '600 52px "IBM Plex Mono", monospace';
+        ctx.fillText(text, 256, 52, 480);
+      }),
+    [text],
+  );
+  return (
+    <Billboard position={[0, 0.085, 0]}>
+      <mesh renderOrder={20}>
+        <planeGeometry args={[width, 0.034]} />
+        <meshBasicMaterial map={map} toneMapped={false} transparent depthTest={false} />
+      </mesh>
+    </Billboard>
   );
 }
 
@@ -417,6 +494,32 @@ function UvMark() {
   );
 }
 
+/**
+ * A wire rises off its terminal, runs level over the modules and drops onto the other one,
+ * instead of cutting straight through whatever stands in between. `lane` spreads wires
+ * that would otherwise lie on top of each other.
+ */
+function wirePath(a: THREE.Vector3, b: THREE.Vector3, lane: number): THREE.CatmullRomCurve3 {
+  const span = a.distanceTo(b);
+  const top = span < 0.25 ? Math.max(a.y, b.y) + 0.05 + span * 0.25 : Math.max(a.y, b.y, 0.19) + 0.04 + lane * 0.009;
+  const side = new THREE.Vector3(b.z - a.z, 0, a.x - b.x).normalize().multiplyScalar((lane - 1.5) * 0.014);
+  const at = (t: number) => a.clone().lerp(b, t).add(side).setY(top);
+  const lift = (p: THREE.Vector3) => p.clone().setY(p.y + (top - p.y) * 0.6);
+  return new THREE.CatmullRomCurve3([a, lift(a), at(0.22), at(0.5), at(0.78), lift(b), b], false, "catmullrom", 0.35);
+}
+
+/** One loose end of a cut wire: the stretch of the path from `from` to `to`, sagging toward the cut. */
+function stub(path: THREE.CatmullRomCurve3, from: number, to: number): THREE.CatmullRomCurve3 {
+  const points: THREE.Vector3[] = [];
+  for (let i = 0; i <= 12; i++) {
+    const k = i / 12;
+    const p = path.getPoint(from + (to - from) * k);
+    p.y -= k * k * 0.07;
+    points.push(p);
+  }
+  return new THREE.CatmullRomCurve3(points);
+}
+
 function HarnessWires() {
   const bomb = useGame((s) => s.bomb);
   const cutIds = useGame((s) => s.cutIds);
@@ -424,30 +527,26 @@ function HarnessWires() {
   const unlocked = useGame((s) => s.codeUnlocked);
   const jumpers = useGame((s) => s.jumpers);
   const selected = useGame((s) => s.selectedId);
+  const hovered = useGame((s) => (s.hoverId?.startsWith("w:") ? s.hoverId.slice(2) : null));
   const marked = useGame((s) => s.markedIds);
   const dispatch = useGame((s) => s.dispatch);
   const built = useMemo(() => {
     if (!bomb) return [];
-    return bomb.wires.flatMap((wire) => {
+    return bomb.wires.flatMap((wire, n) => {
       const a = pointOf(bomb, wire.a, exploded);
       const b = pointOf(bomb, wire.b, exploded);
       if (!a || !b) return [];
+      const path = wirePath(a, b, n % 4);
       const cut = cutIds.includes(wire.id);
-      const spans = cut
-        ? [
-            [a, a.clone().lerp(b, 0.38)],
-            [b.clone().lerp(a, 0.38), b],
-          ]
-        : [[a, b]];
-      return spans.map((pair, index) => {
-        const [p, q] = pair as [THREE.Vector3, THREE.Vector3];
-        const mid = p.clone().lerp(q, 0.5);
-        mid.y += cut ? 0.05 : 0.18;
-        const curve = new THREE.QuadraticBezierCurve3(p, mid, q);
-        const visible = new THREE.TubeGeometry(curve, 28, 0.015, 6, false);
-        const hit = new THREE.TubeGeometry(curve, 10, 0.05, 5, false);
-        return { wire, index, visible, hit, mid: a.clone().lerp(b, 0.5).setY(a.clone().lerp(b, 0.5).y + 0.18) };
-      });
+      const curves = cut ? [stub(path, 0, 0.4), stub(path, 1, 0.6)] : [path];
+      return curves.map((curve, index) => ({
+        wire,
+        index,
+        cut,
+        path,
+        visible: new THREE.TubeGeometry(curve, cut ? 16 : 48, 0.013, 8, false),
+        hit: new THREE.TubeGeometry(curve, cut ? 8 : 20, 0.045, 5, false),
+      }));
     });
   }, [bomb, cutIds, exploded]);
 
@@ -460,56 +559,49 @@ function HarnessWires() {
     };
   }, [built]);
 
-  const shield = useMemo(() => {
-    if (!bomb || unlocked) return null;
-    const wire = bomb.wires.find(
-      (w) => w.role === "sicura" && !cutIds.includes(w.id) && (w.a === "det-inhibit" || w.b === "det-inhibit"),
-    );
-    if (!wire) return null;
-    const a = pointOf(bomb, wire.a, exploded);
-    const b = pointOf(bomb, wire.b, exploded);
-    if (!a || !b) return null;
-    const mid = a.clone().lerp(b, 0.55);
-    mid.y += 0.12;
-    return mid;
-  }, [bomb, unlocked, cutIds, exploded]);
-
   if (!bomb) return null;
+  const guarded = unlocked
+    ? undefined
+    : built.find((item) => item.wire.role === "sicura" && !item.cut && (item.wire.a === "det-inhibit" || item.wire.b === "det-inhibit"));
   return (
     <group>
-      {built.map((item) => (
-        <group key={`${item.wire.id}-${item.index}`}>
-          <mesh geometry={item.visible} castShadow>
-            <meshStandardMaterial
-              color={colorHex(item.wire.color)}
-              roughness={0.42}
-              metalness={0.18}
-              emissive={marked.includes(item.wire.id) ? "#e2b43a" : "#000000"}
-              emissiveIntensity={marked.includes(item.wire.id) ? 0.55 : 0}
-            />
-          </mesh>
-          <mesh
-            geometry={item.hit}
-            onClick={(e) => {
-              e.stopPropagation();
-              dispatch({ type: "pointer-wire", id: item.wire.id });
-            }}
-          >
-            <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
-          </mesh>
-          {selected === item.wire.id && item.index === 0 && (
-            <mesh position={item.mid}>
-              <sphereGeometry args={[0.03, 8, 8]} />
-              <meshBasicMaterial color="#ffb020" />
+      {built.map((item) => {
+        const id = item.wire.id;
+        const tape = marked.includes(id);
+        const lit = hovered === id || selected === id;
+        return (
+          <group key={`${id}-${item.index}`}>
+            <mesh geometry={item.visible} castShadow>
+              <meshStandardMaterial
+                color={colorHex(item.wire.color)}
+                roughness={0.42}
+                metalness={0.18}
+                emissive={lit ? colorHex(item.wire.color) : tape ? "#e2b43a" : "#000000"}
+                emissiveIntensity={lit ? 0.9 : tape ? 0.55 : 0}
+              />
             </mesh>
-          )}
-          {item.index === 0 && item.wire.diode && !cutIds.includes(item.wire.id) && (
-            <DiodeBead bomb={bomb} wire={item.wire} exploded={exploded} />
-          )}
-        </group>
-      ))}
-      {shield && (
-        <mesh position={shield}>
+            <mesh
+              geometry={item.hit}
+              onClick={(e) => {
+                e.stopPropagation();
+                dispatch({ type: "pointer-wire", id });
+              }}
+              {...hoverHandlers(`w:${id}`)}
+            >
+              <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
+            </mesh>
+            {tape && item.index === 0 && (
+              <mesh position={item.path.getPoint(item.cut ? 0.2 : 0.5)}>
+                <sphereGeometry args={[0.022, 10, 10]} />
+                <meshStandardMaterial color="#e2b43a" roughness={0.7} />
+              </mesh>
+            )}
+            {item.index === 0 && item.wire.diode && !item.cut && <DiodeBead wire={item.wire} path={item.path} />}
+          </group>
+        );
+      })}
+      {guarded && (
+        <mesh position={guarded.path.getPoint(0.5)}>
           <boxGeometry args={[0.12, 0.05, 0.16]} />
           <meshStandardMaterial color="#9aa0a6" metalness={0.8} roughness={0.25} />
         </mesh>
@@ -521,26 +613,16 @@ function HarnessWires() {
   );
 }
 
-function DiodeBead({ bomb, wire, exploded }: { bomb: Bomb; wire: Wire; exploded: boolean }) {
-  const geo = useMemo(() => {
-    const pa = pointOf(bomb, wire.a, exploded);
-    const pb = pointOf(bomb, wire.b, exploded);
-    if (!pa || !pb || !wire.diode) return null;
-    const from = wire.diode === "a-b" ? pa : pb;
-    const to = wire.diode === "a-b" ? pb : pa;
-    const pos = from.clone().lerp(to, 0.66);
-    pos.y += 0.16;
-    const dir = to.clone().sub(from);
-    dir.y += 0.12;
-    if (dir.lengthSq() < 1e-8) return null;
-    dir.normalize();
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    return { pos, q };
-  }, [bomb, wire, exploded]);
-  if (!geo) return null;
+/** One-way bead threaded on the wire, its point showing the way current may go. */
+function DiodeBead({ wire, path }: { wire: Wire; path: THREE.CatmullRomCurve3 }) {
+  const forward = wire.diode === "a-b";
+  const t = forward ? 0.62 : 0.38;
+  const dir = path.getTangent(t);
+  if (!forward) dir.negate();
+  const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   return (
-    <mesh position={geo.pos} quaternion={geo.q}>
-      <coneGeometry args={[0.028, 0.07, 7]} />
+    <mesh position={path.getPoint(t)} quaternion={q}>
+      <coneGeometry args={[0.026, 0.065, 9]} />
       <meshStandardMaterial color="#e7d27a" metalness={0.45} roughness={0.32} emissive="#6a5a20" emissiveIntensity={0.4} />
     </mesh>
   );

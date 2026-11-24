@@ -78,6 +78,7 @@ export function App() {
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (event.key === "Escape") {
         if (st.panel) st.closePanel();
+        else if (st.inspectId && !st.archive) st.setInspect(null);
         else st.toggleArchive();
         return;
       }
@@ -123,6 +124,8 @@ export function App() {
             )}
             <TiltGauge />
             <BridgeMeter />
+            <InspectBar />
+            <HoverChip />
           </div>
           <Dossier />
         </div>
@@ -381,6 +384,52 @@ function BagSheet() {
   );
 }
 
+/** Names whatever the pointer is over, so the bench can be read without opening the sheet. */
+function HoverChip() {
+  const text = useGame((s) => {
+    const bomb = s.bomb;
+    if (!bomb || !s.hoverId || s.phase === "boot") return "";
+    const kind = s.hoverId[0];
+    const id = s.hoverId.slice(2);
+    if (kind === "t") return `Morsetto ${terminalLabel(id)}`;
+    if (kind === "w") {
+      const wire = bomb.wires.find((w) => w.id === id);
+      if (!wire) return "";
+      const ends = s.knownWireIds.includes(id) ? `${terminalLabel(wire.a)} → ${terminalLabel(wire.b)}` : "capi non misurati";
+      return `Filo ${colorName(wire.color).toLowerCase()} · ${ends}${s.cutIds.includes(id) ? " · tagliato" : ""}`;
+    }
+    const mod = bomb.modules.find((m) => m.id === id);
+    if (!mod) return "";
+    return s.inspectId === id ? mod.name : `${mod.name} · doppio clic per ispezionare`;
+  });
+  if (!text) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
+      <p className="rounded-sm border border-line bg-bg-raised/95 px-3 py-1 font-mono text-xs text-fg">{text}</p>
+    </div>
+  );
+}
+
+function InspectBar() {
+  const name = useGame((s) => s.bomb?.modules.find((m) => m.id === s.inspectId)?.name ?? "");
+  const blurb = useGame((s) => {
+    const mod = s.bomb?.modules.find((m) => m.id === s.inspectId);
+    return mod ? MODULE_BLURB[mod.kind] : "";
+  });
+  const setInspect = useGame((s) => s.setInspect);
+  if (!name) return null;
+  return (
+    <div className="pointer-events-auto absolute left-3 top-3 max-w-xs rounded-sm border border-accent bg-bg-raised/95 p-2">
+      <p className="text-[10px] tracking-[0.2em] text-lcd">ISPEZIONE</p>
+      <p className="font-display tracking-[0.14em] text-fg">{name}</p>
+      <p className="mt-1 text-xs text-muted">{blurb}</p>
+      <button type="button" onClick={() => setInspect(null)} className="mt-2 h-9 w-full rounded-sm border border-line text-xs text-fg">
+        Torna al banco (Esc)
+      </button>
+    </div>
+  );
+}
+
 function BridgeMeter() {
   const phase = useGame((s) => s.phase);
   const bridge = useGame((s) => s.bridge);
@@ -408,7 +457,7 @@ function TiltGauge() {
   const tool = useGame((s) => s.tool);
   if (tool !== "maneggio" || ratio <= 0) return null;
   return (
-    <div className="pointer-events-none absolute left-3 top-3 w-36 rounded-sm border border-line bg-bg-raised/90 p-2">
+    <div className="pointer-events-none absolute left-1/2 top-3 w-36 -translate-x-1/2 rounded-sm border border-line bg-bg-raised/90 p-2">
       <p className="text-xs text-muted">Grano di scena</p>
       <div className="mt-1 h-1.5 bg-surface">
         <div className={`h-full ${ratio > 0.75 ? "bg-accent" : "bg-lcd"}`} style={{ width: `${Math.round(ratio * 100)}%` }} />
@@ -453,6 +502,15 @@ function Dossier() {
       </p>
       <p className="mt-2 text-xs text-lcd">{fitLine(bomb, selectedId)}</p>
       {wire && <WireFacts id={wire.id} />}
+      {module && (
+        <button
+          type="button"
+          onClick={() => useGame.getState().setInspect(module.id)}
+          className="mt-2 h-10 w-full rounded-sm border border-line text-xs text-fg"
+        >
+          Ispeziona da vicino
+        </button>
+      )}
       {module?.kind === "keypad" && <KeypadPad />}
       {module?.kind === "dial" && <DialPad />}
       {(module?.kind === "leds" || module?.kind === "receiver") && <ListenButton />}

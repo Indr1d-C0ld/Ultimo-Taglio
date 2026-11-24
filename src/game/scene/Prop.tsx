@@ -97,7 +97,8 @@ export function useSelectionGlow(prop: Prop, selected: boolean, skip?: RegExp) {
         const std = m as THREE.MeshStandardMaterial;
         if (!std.emissive || std.userData.lamp) continue;
         std.emissive.set(selected ? "#ffb020" : "#000000");
-        std.emissiveIntensity = selected ? 0.22 : 0;
+        // Faint: the texture has to stay readable under it.
+        std.emissiveIntensity = selected ? 0.07 : 0;
       }
     });
   }, [prop, selected, skip]);

@@ -26,6 +26,12 @@ interface UiState {
   lastRun: RunRecord | null;
   /** Awards unlocked by the scene that just ended. */
   newAwards: string[];
+  /** What the pointer is over on the bench: "t:" terminal, "w:" wire, "m:" module. */
+  hoverId: string | null;
+  setHover: (id: string | null) => void;
+  /** Module the camera is parked on for a close look. */
+  inspectId: string | null;
+  setInspect: (id: string | null) => void;
   panel: Panel | null;
   /** The run the scene sheet is showing; null means the latest. */
   viewRun: RunRecord | null;
@@ -140,12 +146,19 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [] });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [], inspectId: null, hoverId: null });
+    else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
     else set({ ...next, ...filed });
   },
   save: loadSave(),
   lastRun: null,
   newAwards: [],
+  hoverId: null,
+  setHover: (hoverId) => {
+    if (get().hoverId !== hoverId) set({ hoverId });
+  },
+  inspectId: null,
+  setInspect: (inspectId) => set(inspectId ? { inspectId, selectedId: inspectId } : { inspectId: null }),
   panel: null,
   viewRun: null,
   openPanel: (panel, run) => set({ panel, viewRun: run ?? null }),
