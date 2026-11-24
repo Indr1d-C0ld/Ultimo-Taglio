@@ -7,6 +7,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
 import { Device, inspectPoint } from "./Device";
+import { Finale } from "./Finale";
 import { HandSurface, ToolInHand } from "./Hand";
 
 export function BombCanvas() {
@@ -34,6 +35,7 @@ export function BombCanvas() {
         </Shake>
       </HandSurface>
       <ToolInHand />
+      <Finale />
       <Controls />
       <Clock />
       <Maneggio />
@@ -69,7 +71,9 @@ function Effects() {
 function Lights() {
   const uv = useGame((s) => s.uv && s.phase !== "boot");
   const blackout = useGame((s) => s.phase === "play" && s.mods.includes("luci-basse"));
-  const dim = uv ? 0.14 : blackout ? 0.05 : 1;
+  const blown = useGame((s) => s.phase === "boom");
+  // After the blast the stage lamps are gone: what is left is the fire.
+  const dim = blown ? 0.22 : uv ? 0.14 : blackout ? 0.05 : 1;
   return (
     <>
       <hemisphereLight args={[uv ? "#7a52d6" : "#f0d2b4", "#1a120e", uv ? 0.5 : 0.55]} />
@@ -251,6 +255,14 @@ function Controls() {
     controls.current?.target.copy(HOME.target);
     controls.current?.update();
   }, []);
+
+  // The scene is over: step back and take in the whole bench.
+  useEffect(() => {
+    if (phase !== "boom" && phase !== "safe") return;
+    if (useGame.getState().inspectId) useGame.getState().setInspect(null);
+    wasInspecting.current = false;
+    flight.current = { target: HOME.target.clone(), eye: HOME.eye.clone().multiplyScalar(1.12) };
+  }, [phase]);
 
   useFrame((_, delta) => {
     const c = controls.current;

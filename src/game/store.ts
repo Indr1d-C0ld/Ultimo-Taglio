@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { beep, blip, boom, clamp, setMuted, snip, unlockAudio, win } from "./audio";
+import { beep, blip, boom, clamp, clap, setMuted, setTension, snip, startScore, stopScore, unlockAudio, win } from "./audio";
 import { initialState, reduce } from "./logic";
 import {
   activeProfile,
@@ -52,6 +52,8 @@ interface UiState {
   /** Bloom, depth of field and vignette. Off for a machine that struggles with them. */
   effects: boolean;
   toggleEffects: () => void;
+  /** Counts scenes started, so the opening slate replays on every take. */
+  take: number;
   /** The campaign screen. */
   film: boolean;
   toggleFilm: () => void;
@@ -155,6 +157,16 @@ export const useGame = create<GameStore>((set, get) => ({
     if (action.type === "start" || action.type === "pointer-terminal" || action.type === "keypad") unlockAudio();
     const next = reduce(toRun(prev), action);
     if (prev.phase === "play" && next.phase === "boom") fx.shake = 0.28;
+    // The score runs under the scene whatever the sound switch says; the switch only mutes it.
+    if (action.type === "start") {
+      startScore();
+      if (prev.sound) clap();
+    } else if (prev.phase === "play" && next.phase !== "play") {
+      stopScore();
+    } else if (action.type === "tick" && next.phase === "play" && next.bomb) {
+      const clock = next.mode === "ripresa" ? 1 - next.secondsLeft / next.bomb.seconds : 0.2;
+      setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0));
+    }
     if (prev.phase === "play" && next.phase === "safe") fx.shake = 0.06;
     if (prev.sound) {
       if (next.cutIds.length > prev.cutIds.length) snip();
@@ -177,7 +189,7 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, take: prev.take + 1, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
     else set({ ...next, ...filed });
   },
@@ -196,6 +208,7 @@ export const useGame = create<GameStore>((set, get) => ({
     writeFlag("ultimo-taglio-effetti", effects);
     set({ effects });
   },
+  take: 0,
   film: false,
   toggleFilm: () => set({ film: !get().film }),
   codePad: ["", "", "", ""],

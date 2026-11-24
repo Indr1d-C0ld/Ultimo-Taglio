@@ -122,11 +122,12 @@ export function App() {
                   key={endKey}
                   className={`pointer-events-none absolute inset-0 ${phase === "boom" ? "bg-accent flash-boom" : "bg-ok flash-safe"}`}
                 />
-                <div className="pointer-events-none absolute inset-0 flex items-end justify-center p-3 md:items-center">
+                <div key={`card-${endKey}`} className="end-late pointer-events-none absolute inset-0 flex items-end justify-center p-3 md:items-center">
                   <EndCard />
                 </div>
               </div>
             )}
+            <OpeningSlate />
             <TiltGauge />
             <BridgeMeter />
             <InspectBar />
@@ -393,6 +394,39 @@ function BagSheet() {
         </button>
       </div>
       <KitList onPick={toggleBag} />
+    </div>
+  );
+}
+
+/** Every take opens like one: bars, slate, clap. Keyed on the take so it replays each time. */
+function OpeningSlate() {
+  const take = useGame((s) => s.take);
+  const title = useGame((s) => s.bomb?.title ?? "");
+  const phase = useGame((s) => s.phase);
+  const performer = useGame((s) => activeProfile(s.save).name);
+  const film = useGame((s) => sceneById(s.campaign)?.title ?? "");
+  // Which take of this very scene: earlier attempts on the same seed and part, plus this one.
+  const ciak = useGame((s) => 1 + activeProfile(s.save).runs.filter((r) => r.seed === s.seed && r.difficulty === s.difficulty).length);
+  if (phase !== "play" || !take) return null;
+  const [scene, shell] = title.split(" — ");
+  return (
+    <div key={take} className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+      <div className="letterbox top-0" />
+      <div className="letterbox bottom-0" />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="slate-card w-72 border-2 border-fg bg-bg/95 p-3 font-mono text-fg">
+          <p className="border-b border-fg pb-1 font-display text-xl tracking-[0.2em]">ULTIMO TAGLIO</p>
+          <div className="mt-2 grid grid-cols-2 gap-x-3 text-sm">
+            <p className="text-muted">SCENA</p>
+            <p className="text-right">{scene?.replace("Scena ", "") ?? ""}</p>
+            <p className="text-muted">CIAK</p>
+            <p className="text-right text-lcd">{ciak}</p>
+            <p className="text-muted">INTERPRETE</p>
+            <p className="truncate text-right">{performer}</p>
+          </div>
+          <p className="mt-2 border-t border-fg pt-1 text-xs text-muted">{film || shell}</p>
+        </div>
+      </div>
     </div>
   );
 }

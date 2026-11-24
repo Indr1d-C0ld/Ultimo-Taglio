@@ -3,6 +3,7 @@ let muted = false;
 
 export function setMuted(next: boolean) {
   muted = next;
+  if (score && ctx) score.out.gain.setTargetAtTime(next ? 0 : 1, ctx.currentTime, 0.05);
 }
 
 export function unlockAudio() {
@@ -90,4 +91,139 @@ export function blip() {
 export function clamp() {
   unlockAudio();
   tone(420, 0.025, "triangle", 0.07);
+}
+
+/** The clapperboard: two dry cracks a breath apart. */
+export function clap() {
+  unlockAudio();
+  if (!ctx || muted) return;
+  for (const at of [0, 0.03]) {
+    const t = ctx.currentTime + at;
+    const len = Math.floor(ctx.sampleRate * 0.05);
+    const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const band = ctx.createBiquadFilter();
+    band.type = "bandpass";
+    band.frequency.value = 1900;
+    const g = ctx.createGain();
+    g.gain.value = 0.5;
+    src.connect(band);
+    band.connect(g);
+    g.connect(ctx.destination);
+    src.start(t);
+  }
+}
+
+/**
+ * The score under a scene, made of oscillators: a low drone that opens up as the clock
+ * runs down, a heartbeat that comes in past the middle and quickens, and a held
+ * dissonance for the last stretch. `setTension` moves all three.
+ */
+interface Score {
+  out: GainNode;
+  drone: GainNode;
+  filter: BiquadFilterNode;
+  strings: GainNode;
+  nodes: OscillatorNode[];
+  timer: ReturnType<typeof setInterval>;
+  tension: number;
+  nextBeat: number;
+}
+let score: Score | null = null;
+
+export function startScore() {
+  unlockAudio();
+  stopScore();
+  if (!ctx) return;
+  const audio = ctx;
+  const out = audio.createGain();
+  out.gain.value = muted ? 0 : 1;
+  out.connect(audio.destination);
+
+  const filter = audio.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 160;
+  const drone = audio.createGain();
+  drone.gain.value = 0;
+  drone.gain.setTargetAtTime(0.05, audio.currentTime, 1.2);
+  filter.connect(drone);
+  drone.connect(out);
+
+  const nodes: OscillatorNode[] = [];
+  const voice = (type: OscillatorType, freq: number, to: AudioNode | AudioParam, level = 1) => {
+    const osc = audio.createOscillator();
+    osc.type = type;
+    osc.frequency.value = freq;
+    const g = audio.createGain();
+    g.gain.value = level;
+    osc.connect(g);
+    // connect() is overloaded for nodes and params; the union needs a nudge.
+    g.connect(to as AudioNode);
+    osc.start();
+    nodes.push(osc);
+    return osc;
+  };
+  voice("sawtooth", 41.2, filter, 0.6);
+  voice("sawtooth", 41.5, filter, 0.6);
+  voice("sine", 61.7, filter, 0.9);
+
+  // Two notes a semitone apart, shivering: the sound of a decision about to be wrong.
+  const strings = audio.createGain();
+  strings.gain.value = 0;
+  const tremolo = audio.createGain();
+  tremolo.gain.value = 0.6;
+  voice("sine", 6.5, tremolo.gain, 0.4);
+  tremolo.connect(strings);
+  strings.connect(out);
+  voice("triangle", 220, tremolo, 0.5);
+  voice("triangle", 233.1, tremolo, 0.5);
+
+  const timer = setInterval(() => {
+    if (!score || !ctx) return;
+    const now = ctx.currentTime;
+    if (score.tension < 0.45 || now < score.nextBeat) return;
+    // Lub-dub. From one beat every 1.1 s down to one every 0.42 s.
+    const gap = 1.1 - (score.tension - 0.45) * 1.24;
+    for (const [at, level] of [[0, 0.22], [0.13, 0.15]] as const) {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.frequency.setValueAtTime(70, now + at);
+      osc.frequency.exponentialRampToValueAtTime(42, now + at + 0.09);
+      g.gain.setValueAtTime(level, now + at);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.11);
+      osc.connect(g);
+      g.connect(score.out);
+      osc.start(now + at);
+      osc.stop(now + at + 0.14);
+    }
+    score.nextBeat = now + gap;
+  }, 60);
+
+  score = { out, drone, filter, strings, nodes, timer, tension: 0, nextBeat: 0 };
+}
+
+/** 0 at the opening of a scene, 1 at the last second. */
+export function setTension(value: number) {
+  if (!score || !ctx) return;
+  const t = Math.min(1, Math.max(0, value));
+  score.tension = t;
+  const now = ctx.currentTime;
+  score.filter.frequency.setTargetAtTime(160 + t * t * 620, now, 0.4);
+  score.drone.gain.setTargetAtTime(0.05 + t * 0.05, now, 0.4);
+  score.strings.gain.setTargetAtTime(t > 0.75 ? (t - 0.75) * 0.14 : 0, now, 0.3);
+}
+
+export function stopScore() {
+  if (!score || !ctx) return;
+  const done = score;
+  score = null;
+  clearInterval(done.timer);
+  done.out.gain.setTargetAtTime(0, ctx.currentTime, 0.12);
+  setTimeout(() => {
+    for (const osc of done.nodes) osc.stop();
+    done.out.disconnect();
+  }, 700);
 }

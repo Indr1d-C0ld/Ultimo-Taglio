@@ -81,7 +81,7 @@
 /* The flash must end transparent and stay there, or it paints over the bench. */
 .flash-boom {
   opacity: 0;
-  animation: flash-boom 700ms ease-out;
+  animation: flash-boom 1100ms ease-out;
 }
 
 .flash-safe {
@@ -89,8 +89,50 @@
   animation: flash-safe 800ms ease-out;
 }
 
+/* White first, as film does when it burns through; then the colour drains out. */
 @keyframes flash-boom {
-  0% { opacity: 0.85; }
+  0% { opacity: 1; background: #fff; }
+  12% { opacity: 0.95; background: #ffd9a0; }
+  35% { opacity: 0.6; }
+  100% { opacity: 0; }
+}
+
+/* The end card waits for the blast, or the relief, to be seen first. */
+.end-late {
+  animation: end-late 500ms ease-out 1500ms both;
+}
+
+@keyframes end-late {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Opening of a take: cinema bars close in, the slate shows, both leave. */
+.letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: #000;
+  animation: letterbox 2600ms ease-in-out forwards;
+}
+
+@keyframes letterbox {
+  0% { height: 50%; }
+  18% { height: 11%; }
+  78% { height: 11%; }
+  100% { height: 0; }
+}
+
+.slate-card {
+  opacity: 0;
+  animation: slate-card 2600ms ease-in-out forwards;
+}
+
+@keyframes slate-card {
+  0% { opacity: 0; transform: scale(1.06); }
+  14% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; }
   100% { opacity: 0; }
 }
 
@@ -100,6 +142,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .letterbox,
+  .slate-card {
+    animation: none;
+    display: none;
+  }
+
+  .end-late {
+    animation: none;
+  }
+
   .flash-boom,
   .flash-safe,
   .lcd-hot,
