@@ -1,0 +1,725 @@
+import { probeReading, wireSeat, type NetView } from "./circuit";
+import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
+import { generateBomb } from "./generate";
+import { fitLine } from "./kit";
+import { colorName, terminalLabel } from "./palette";
+import type { Action, Bomb, Difficulty, LogLine, Mode, RunState, Wire } from "./types";
+
+const TILT_LIMIT = 0.32;
+const MAX_TICK = 0.5;
+
+export function initialState(): RunState {
+  return {
+    phase: "boot",
+    mode: "ripresa",
+    difficulty: "caratterista",
+    seed: "",
+    bomb: null,
+    secondsLeft: 0,
+    timeAcc: 0,
+    lidOpen: false,
+    pressureShunted: false,
+    tiltLocked: false,
+    capDumped: false,
+    codeUnlocked: false,
+    dialMatched: false,
+    dialDigits: [0, 0, 0],
+    keypad: "",
+    displayDead: false,
+    ledsBlind: false,
+    uv: false,
+    xray: false,
+    exploded: false,
+    tool: "occhio",
+    selectedId: null,
+    probeA: null,
+    pendingJumper: null,
+    jumpers: [],
+    cutIds: [],
+    knownWireIds: [],
+    notes: [],
+    log: [],
+    logSeq: 1,
+    hintsUsed: 0,
+    mistakes: 0,
+    attitude: { x: 0, z: 0 },
+    listenLeft: 0,
+    listenKind: null,
+    decoded: { uv: false, blinks: false, morse: false },
+    dialPenalty: false,
+    pingCount: 0,
+    forceNicks: 0,
+    endReason: "",
+    markedIds: [],
+    cellSpare: true,
+    warned30: false,
+    bridge: 0,
+    bridgeHot: false,
+    bridgeCause: null,
+    bridgeWarned: false,
+  };
+}
+
+function say(s: RunState, text: string, tone: LogLine["tone"]): RunState {
+  const line: LogLine = { id: s.logSeq, text, tone };
+  return { ...s, logSeq: s.logSeq + 1, log: [...s.log, line].slice(-32) };
+}
+
+function note(s: RunState, text: string): RunState {
+  if (s.notes.includes(text)) return s;
+  return { ...s, notes: [...s.notes, text] };
+}
+
+function boom(s: RunState, reason: string): RunState {
+  return { ...say(s, reason, "bad"), phase: "boom", endReason: reason, listenLeft: 0 };
+}
+
+function ownerOf(bomb: Bomb, terminalId: string): string {
+  if (terminalId.startsWith("sw-")) return "chassis";
+  for (const m of bomb.modules) {
+    if (m.terminals.some((t) => t.id === terminalId)) return m.id;
+  }
+  return "chassis";
+}
+
+function interior(terminalId: string): boolean {
+  return !terminalId.startsWith("sw-");
+}
+
+function viewOf(s: RunState): NetView {
+  return {
+    cutIds: s.cutIds,
+    jumpers: s.jumpers,
+    codeUnlocked: s.codeUnlocked,
+    capDumped: s.capDumped,
+  };
+}
+
+function describePair(s: RunState, a: string, b: string): { text: string; wireId?: string } {
+  const bomb = s.bomb!;
+  const pair = new Set([a, b]);
+  if (pair.has("cap-hot") && pair.has("cap-load")) {
+    return {
+      text: s.capDumped
+        ? "Condensatore di scena inerte. Il carico fittizio ha già assorbito la scarica di copione."
+        : "Condensatore carico. Il morsetto CARICO FITTIZIO è l'unico ponticello sicuro: non passa dal percorso dell'innesco.",
+    };
+  }
+  if (pair.has("cap-hot") && pair.has("bat-pos")) {
+    return {
+      text: s.capDumped
+        ? "Scaricato. COND + non è più vincolato alla cella."
+        : "Vincolo interno: COND + e BAT + sono lo stesso nodo finché non scarichi sul carico fittizio. Tagliare l'alimentazione adesso lascia la scarica sull'innesco.",
+    };
+  }
+  if (pair.has("sw-a") && pair.has("sw-b")) {
+    return {
+      text: s.pressureShunted
+        ? "Microswitch di copertura già tenuto aperto dal ponticello."
+        : "Microswitch del coperchio. Va ponticellato prima del cacciavite. Non è sul percorso dell'innesco.",
+    };
+  }
+  const reading = probeReading(bomb, viewOf(s), a, b);
+  const bridge =
+    pair.has("det-in") || pair.has("det-inhibit")
+      ? ` ${bridgeSentence(s.bridge, s.bridgeHot, !!(s.bomb?.gates.cap && !s.capDumped))}`
+      : "";
+  if (pair.has("cap-hot") && pair.has("det-in")) {
+    return { text: `Un ponticello diretto fra COND + e INNESCO chiude il copione. ${reading.text}${bridge}` };
+  }
+  if (pair.has("bat-pos") && pair.has("det-in") && !reading.wireId) {
+    return { text: `${reading.text} Un ponticello diretto, invece, sarebbe l'innesco stesso.${bridge}` };
+  }
+  if (pair.has("det-in") && pair.has("det-inhibit")) {
+    return { text: `I due morsetti del tubo non si parlano. L'inibitore non è il ritorno dell'innesco.${bridge}` };
+  }
+  return bridge ? { ...reading, text: `${reading.text}${bridge}` } : reading;
+}
+
+function guards(s: RunState): { ok: boolean; reason: string } {
+  const bomb = s.bomb!;
+  if (!s.lidOpen) return { ok: false, reason: `${bomb.cover} ancora chiuso` };
+  if (bomb.gates.cap && !s.capDumped) return { ok: false, reason: "condensatore di scena ancora carico" };
+  if (bomb.gates.keypad && !s.codeUnlocked) return { ok: false, reason: "sportello del codice ancora chiuso" };
+  return { ok: true, reason: "" };
+}
+
+function requirePlay(s: RunState): RunState | null {
+  if (!s.bomb || (s.phase !== "play" && s.phase !== "boot")) return s;
+  return null;
+}
+
+function live(s: RunState): boolean {
+  return s.phase === "play" && !!s.bomb;
+}
+
+export function reduce(state: RunState, action: Action): RunState {
+  switch (action.type) {
+    case "abort":
+      return { ...initialState(), difficulty: state.difficulty, mode: state.mode, seed: state.seed };
+    case "start":
+      return start(action.seed, action.difficulty, action.mode);
+    case "tool":
+      return { ...state, tool: action.tool, probeA: null, pendingJumper: null };
+    case "select":
+      return { ...state, selectedId: action.id };
+    case "toggle":
+      return toggle(state, action.key);
+    case "tick":
+      return tick(state, action.dt);
+    case "pointer-part":
+      return onPart(state, action.id);
+    case "pointer-terminal":
+      return onTerminal(state, action.id);
+    case "pointer-wire":
+      return onWire(state, action.id);
+    case "pointer-latch":
+      return onLatch(state);
+    case "pointer-tilt":
+      return onTilt(state);
+    case "keypad":
+      return onKeypad(state, action.key);
+    case "dial":
+      return onDial(state, action.index, action.dir);
+    case "rotate":
+      return onRotate(state, action.dx, action.dz);
+    case "reset-attitude":
+      return { ...state, attitude: { x: 0, z: 0 } };
+    case "listen":
+      return onListen(state);
+    case "hint":
+      return onHint(state);
+    default:
+      return state;
+  }
+}
+
+function start(seed: string, difficulty: Difficulty, mode: Mode): RunState {
+  const clean = seed.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "CIAK01";
+  const bomb = generateBomb(clean, difficulty);
+  let s = say(initialState(), `${bomb.title}. Seme ${clean}. Il tempo ${mode === "prova" ? "è in prova generale." : "è in ripresa."}`, "info");
+  s = say(s, "I colori non hanno un significato fisso. Il multimetro legge il percorso: cella, giunti, perle, relè. Non il costume del filo.", "info");
+  return {
+    ...s,
+    phase: "play",
+    mode,
+    difficulty,
+    seed: clean,
+    bomb,
+    secondsLeft: bomb.seconds,
+  };
+}
+
+function toggle(s: RunState, key: "uv" | "xray" | "exploded"): RunState {
+  const next = !s[key];
+  let n: RunState = { ...s, [key]: next };
+  if (key === "uv" && next && s.bomb && s.phase === "play" && !s.decoded.uv) {
+    n = { ...n, decoded: { ...n.decoded, uv: true } };
+    n = note(n, `UV — prima cifra: ${s.bomb.uvDigit}`);
+    n = say(n, `Sotto la lampada UV compare un numero: ${s.bomb.uvDigit}. È la prima cifra.`, "good");
+  } else if (key === "uv" && next) {
+    n = say(n, "Lampada UV accesa. Le scritte di scena invisibili escono dal metallo.", "info");
+  } else if (key === "xray") {
+    n = say(n, next ? "Raggi di scena: il guscio diventa velo." : "Raggi spenti.", "info");
+  } else if (key === "exploded") {
+    n = say(n, next ? "Vista esplosa. I moduli si scostano, l'assetto non cambia." : "Moduli richiusi.", "info");
+  }
+  return n;
+}
+
+function advanceBridge(s: RunState, dt: number): RunState {
+  if (s.phase !== "play" || !s.bomb) return s;
+  const bomb = s.bomb;
+  let hot = s.bridgeHot;
+  let cause = s.bridgeCause;
+  const wasHot = hot;
+  if (hot && bruiseHealed(s)) {
+    hot = false;
+    cause = null;
+  }
+  const capLive = !!(bomb.gates.cap && !s.capDumped);
+  const rest = bridgeRest(firingPath(bomb, viewOf(s)), capLive);
+  const stepped = stepBridge(s.bridge, hot, rest, dt, s.mode === "prova");
+  if (stepped.saturated) {
+    return boom(
+      { ...s, bridge: 1, bridgeHot: true },
+      "Il ponte di scena ha saturato. Il tubo chiude il copione da solo.",
+    );
+  }
+  let n: RunState = { ...s, bridge: stepped.bridge, bridgeHot: hot, bridgeCause: cause };
+  if (hot && !n.bridgeWarned && stepped.bridge >= 0.75) {
+    n = say(n, "Ponte oltre il settantacinque. Solo la guardia che l'ha ferito lo raffredda.", "warn");
+    n = { ...n, bridgeWarned: true };
+  }
+  if (wasHot && !hot) {
+    n = say(n, "La guardia è a posto. Il ponte smette di salire e torna al minimo di copione.", "good");
+  }
+  return n;
+}
+
+function tick(s: RunState, dt: number): RunState {
+  if (s.phase !== "play" || !s.bomb) return s;
+  // The scene clock batches frames into ticks of about a quarter second, so the
+  // clamp must sit above that or the countdown runs slow. It only guards
+  // against a stalled tab handing over one huge delta.
+  const step = Math.min(Math.max(dt, 0), MAX_TICK);
+  let n = s;
+  if (s.listenLeft > 0) {
+    const left = s.listenLeft - step;
+    if (left <= 0) n = finishListen(s);
+    else n = { ...s, listenLeft: left };
+  }
+  n = advanceBridge(n, step);
+  if (n.phase !== "play") return n;
+  if (n.mode !== "ripresa" || !n.bomb) return n;
+  const bomb = n.bomb;
+
+  let acc = n.timeAcc + step;
+  let left = n.secondsLeft;
+  let whole = 0;
+  while (acc >= 1) {
+    acc -= 1;
+    whole += 1;
+  }
+  if (whole === 0) return { ...n, timeAcc: acc };
+
+  left -= whole;
+  if (left <= 0) return boom({ ...n, secondsLeft: 0, timeAcc: 0 }, "Il tempo di scena è finito. Sipario.");
+
+  n = { ...n, secondsLeft: left, timeAcc: acc };
+
+  if (n.mode === "ripresa" && !n.warned30 && left <= 30) {
+    n = say({ ...n, warned30: true }, "Trenta secondi. Le mani pesano, il copione no.", "warn");
+  }
+
+  const senso = bomb.wires.find((w) => w.role === "senso");
+  const sensoCut = !!senso && n.cutIds.includes(senso.id);
+  const pinging = bomb.gates.receiver && !n.codeUnlocked && !sensoCut;
+  if (pinging) {
+    const due = Math.floor((bomb.seconds - left) / 22);
+    if (due > n.pingCount) {
+      const hits = due - n.pingCount;
+      left -= hits * 7;
+      n = say(
+        { ...n, pingCount: due, secondsLeft: Math.max(0, left), bridge: n.bridgeHot ? n.bridge + hits * 0.12 : Math.min(0.48, n.bridge + hits * 0.08) },
+        n.bridgeHot
+          ? "Ping radio di scena: l'antenna ruba secondi e spinge il ponte già in salita."
+          : "Ping radio di scena: l'antenna ruba secondi finché il codice non la zittisce.",
+        "warn",
+      );
+      if (n.bridge >= 1) return boom(n, "Il ping ha spinto il ponte di scena fino a saturazione.");
+      if (left <= 0) return boom(n, "Il ping di copione ha mangiato l'ultimo secondo.");
+    }
+  }
+
+  if (bomb.gates.dial && !n.dialMatched && !n.dialPenalty && bomb.seconds - n.secondsLeft > bomb.seconds * 0.5) {
+    const penalized = n.secondsLeft - 25;
+    n = say(
+      { ...n, dialPenalty: true, secondsLeft: Math.max(0, penalized) },
+      "Il contatore B, ignorato, salta in avanti di venticinque secondi.",
+      "warn",
+    );
+    if (penalized <= 0) return boom(n, "Il contatore secondario ha chiuso la scena.");
+  }
+
+  return n;
+}
+
+function onTerminal(s: RunState, id: string): RunState {
+  if (!live(s) || !s.bomb) {
+    if (!s.bomb) return s;
+    return { ...s, selectedId: ownerOf(s.bomb, id) };
+  }
+  const bomb = s.bomb;
+  let n: RunState = { ...s, selectedId: ownerOf(bomb, id) };
+  if (interior(id) && !n.lidOpen) {
+    return say(n, `Il ${bomb.cover} copre i morsetti interni. Prima la chiusura, poi le mani.`, "warn");
+  }
+  if (n.tool === "multimetro") return probe(n, id);
+  if (n.tool === "ponticello") return jumper(n, id);
+  if (n.tool === "pinzette") return pullJumper(n, id);
+  if (n.tool === "pila") return useCell(n);
+  return n;
+}
+
+function pullJumper(s: RunState, id: string): RunState {
+  const hit = s.jumpers.find((j) => j.a === id || j.b === id);
+  if (!hit) return say(s, "Nessun coccodrillo su questo morsetto.", "info");
+  const jumpers = s.jumpers.filter((j) => j !== hit);
+  if (hit.kind === "pressure") {
+    if (s.lidOpen) {
+      return boom(
+        { ...s, jumpers },
+        "Ponticello tolto a copertura aperta. Il microswitch chiude il contatto.",
+      );
+    }
+    return say(
+      { ...s, jumpers, pressureShunted: false },
+      "Coccodrilli via dal microswitch. La chiusura è di nuovo armata.",
+      "warn",
+    );
+  }
+  if (hit.kind === "cap") {
+    return say({ ...s, jumpers }, "Ponticello tolto. La scarica non rientra nel cilindro.", "info");
+  }
+  return say({ ...s, jumpers }, "Ponticello rimosso.", "info");
+}
+
+function useCell(s: RunState): RunState {
+  if (!s.cellSpare) return say(s, "La pila di servizio è già sul banco. Non ce n'è un'altra.", "warn");
+  if (!s.displayDead) return say(s, "Il display è acceso. Tieni la pila per quando il vetro muore.", "info");
+  return say(
+    { ...s, displayDead: false, cellSpare: false },
+    "Pila di servizio sul timer. Il vetro torna. Il filo dell'alimentazione resta tagliato.",
+    "good",
+  );
+}
+
+function onPart(s: RunState, id: string): RunState {
+  const n: RunState = { ...s, selectedId: id };
+  if (!live(s) || !s.bomb) return n;
+  if (n.tool === "pila" && (id === "battery" || id === "timer")) return useCell(n);
+  if (n.tool === "brugola" && id === "tilt") return onTilt(n);
+  if (n.tool === "stetoscopio" && (id === "leds" || id === "receiver")) return onListen(n);
+  if (n.tool === "cacciavite" && id === "tilt") {
+    return say(n, "La vite del grano è una brugola. Il cacciavite delle chiusure non entra.", "warn");
+  }
+  if (n.tool === "occhio" || n.tool === "maneggio") return n;
+  return say(n, fitLine(n.bomb, id), "info");
+}
+
+function probe(s: RunState, id: string): RunState {
+  if (!s.probeA) return say({ ...s, probeA: id }, `Sonda A su ${terminalLabel(id)}.`, "info");
+  if (s.probeA === id) return say({ ...s, probeA: null }, "Sonda ritirata.", "info");
+  const reading = describePair(s, s.probeA, id);
+  let n: RunState = { ...s, probeA: null };
+  n = say(n, `${terminalLabel(s.probeA)} ↔ ${terminalLabel(id)} — ${reading.text}`, reading.wireId ? "good" : "info");
+  n = note(n, `${terminalLabel(s.probeA)} ↔ ${terminalLabel(id)}: ${reading.text}`);
+  if (reading.wireId && !n.knownWireIds.includes(reading.wireId)) {
+    n = { ...n, knownWireIds: [...n.knownWireIds, reading.wireId] };
+  }
+  return n;
+}
+
+function jumper(s: RunState, id: string): RunState {
+  if (!s.pendingJumper) return say({ ...s, pendingJumper: id }, `Primo capo su ${terminalLabel(id)}.`, "info");
+  const a = s.pendingJumper;
+  const b = id;
+  if (a === b) return say({ ...s, pendingJumper: null }, "Ponticello annullato.", "info");
+  const pair = new Set([a, b]);
+  let n: RunState = { ...s, pendingJumper: null };
+
+  if (pair.has("sw-a") && pair.has("sw-b")) {
+    if (n.pressureShunted) return say(n, "Il microswitch è già in sicura.", "info");
+    n = { ...n, pressureShunted: true, jumpers: [...n.jumpers, { a, b, kind: "pressure" }] };
+    return say(n, "Ponticello sul microswitch. Il cacciavite adesso può aprire.", "good");
+  }
+  if (pair.has("cap-hot") && pair.has("cap-load")) {
+    if (!n.bomb?.gates.cap) return say(n, "Qui non c'è un condensatore di scena.", "warn");
+    if (n.capDumped) return say(n, "Scarica già avvenuta.", "info");
+    n = { ...n, capDumped: true, jumpers: [...n.jumpers, { a, b, kind: "cap" }] };
+    return say(n, "Il condensatore di scena scarica sul carico fittizio. Un clic da studio, niente altro.", "good");
+  }
+  if ((pair.has("cap-hot") && pair.has("det-in")) || (pair.has("bat-pos") && pair.has("det-in"))) {
+    return boom(n, "Il ponticello ha chiuso l'innesco di scena. Taglio sbagliato di montaggio.");
+  }
+  return say({ ...n, mistakes: n.mistakes + 1 }, "Ponticello senza effetto. Quei due morsetti non formano una guardia.", "warn");
+}
+
+function onWire(s: RunState, id: string): RunState {
+  if (!s.bomb) return s;
+  const bomb = s.bomb;
+  const wire = bomb.wires.find((w) => w.id === id);
+  if (!wire) return s;
+  let n: RunState = { ...s, selectedId: id };
+  if (!live(s)) return n;
+  if (n.tool === "nastro") {
+    if (!n.lidOpen) return say(n, `Non raggiungi i fili con il ${bomb.cover} chiuso.`, "warn");
+    const on = n.markedIds.includes(id);
+    const markedIds = on ? n.markedIds.filter((item) => item !== id) : [...n.markedIds, id];
+    return say(
+      { ...n, markedIds },
+      on ? `Nastro tolto dal ${colorName(wire.color).toLowerCase()}.` : `Nastro giallo sul ${colorName(wire.color).toLowerCase()}. Il circuito non cambia.`,
+      "info",
+    );
+  }
+  if (n.tool === "pinzette") return say(n, "Le pinzette staccano i coccodrilli, non i fili.", "info");
+  if (n.tool !== "tronchese") {
+    if (n.tool === "occhio") return n;
+    return say(n, `${colorName(wire.color)}, da ${terminalLabel(wire.a)} a ${terminalLabel(wire.b)}. Impugna la tronchese per tagliare.`, "info");
+  }
+  if (!n.lidOpen) return say(n, `Non raggiungi i fili con il ${bomb.cover} chiuso.`, "warn");
+  if (n.cutIds.includes(id)) return say(n, "Questo tratto è già tagliato.", "info");
+
+  if (wire.role === "trappola") {
+    return boom(n, `Il ${colorName(wire.color).toLowerCase()} stava sul percorso dalla cella all'innesco. Il colore non c'entra, il verso sì.`);
+  }
+  if (wire.role === "esca") {
+    n = { ...n, cutIds: [...n.cutIds, id] };
+    return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
+  }
+  if (wire.role === "senso") {
+    const blind = !n.decoded.blinks;
+    n = {
+      ...n,
+      cutIds: [...n.cutIds, id],
+      ledsBlind: true,
+      secondsLeft: n.mode === "ripresa" ? Math.max(0, n.secondsLeft - 12) : n.secondsLeft,
+    };
+    n = say(
+      n,
+      blind
+        ? "Hai spento il cluster prima di contare i lampeggi. La seconda cifra adesso è solo negli appunti, se c'erano."
+        : "Onda di scena interrotta. Il cluster si spegne, il conteggio resta negli appunti.",
+      "warn",
+    );
+    if (n.secondsLeft <= 0) return boom(n, "Il taglio sul senso ha bruciato gli ultimi secondi.");
+    return n;
+  }
+  if (wire.role === "alimentazione") {
+    if (bomb.gates.cap && !n.capDumped) {
+      return boom(n, "Alimentazione tagliata col condensatore carico: la scarica di scena finisce sull'innesco.");
+    }
+    n = { ...n, cutIds: [...n.cutIds, id], displayDead: true };
+    return say(n, "Il display LCD si spegne. Il tempo di scena, dietro, continua.", "warn");
+  }
+
+  const g = guards(n);
+  if (!g.ok) {
+    const nick = n.forceNicks + 1;
+    const relayHeld = bomb.gates.keypad && !n.codeUnlocked && g.reason.startsWith("sportello");
+    if (nick >= 2) {
+      return boom(
+        { ...n, forceNicks: nick },
+        relayHeld
+          ? "Hai forzato due volte la linea tenuta dal relè del codice. Il copione chiude."
+          : "Hai forzato la guardia due volte. L'innesco di scena chiude il piano.",
+      );
+    }
+    n = {
+      ...n,
+      forceNicks: nick,
+      mistakes: n.mistakes + 1,
+      secondsLeft: n.mode === "ripresa" ? Math.max(1, n.secondsLeft - 8) : n.secondsLeft,
+      bridgeHot: true,
+      bridgeCause: bruiseOf(g.reason),
+      bridge: Math.max(n.bridge, BRIDGE_BRUISE),
+    };
+    return say(
+      n,
+      relayHeld
+        ? "Il relè del codice è chiuso in parallelo. La tronchese non apre la linea, e il ponte di scena parte: circa nove secondi."
+        : `La tronchese non morde: ${g.reason}. Il ponte parte. Circa nove secondi, poi satura. Un secondo tentativo chiude subito.`,
+      "warn",
+    );
+  }
+
+  n = { ...n, cutIds: [...n.cutIds, id], phase: "safe", bridge: 0, bridgeHot: false, bridgeCause: null };
+  const left = n.secondsLeft;
+  return {
+    ...say(n, "Inibitore aperto. L'innesco di scena resta muto. Il timer si ferma.", "good"),
+    endReason: `Disinnescato con ${formatClock(left)} ancora sul display.`,
+  };
+}
+
+function onLatch(s: RunState): RunState {
+  if (!live(s) || !s.bomb) return { ...s, selectedId: "latch" };
+  const bomb = s.bomb;
+  let n: RunState = { ...s, selectedId: "latch" };
+  if (n.tool === "brugola") return say(n, "La brugola è per la vite del grano, non per le chiusure.", "info");
+  if (n.tool !== "cacciavite") return say(n, "Le chiusure vogliono il cacciavite, non le mani nude.", "info");
+  if (n.lidOpen) return say(n, `Il ${bomb.cover} è già aperto.`, "info");
+  if (bomb.gates.pressure && !n.pressureShunted) {
+    return boom(n, `Il microswitch sotto il ${bomb.cover} ha chiuso il contatto. Andava ponticellato prima.`);
+  }
+  n = { ...n, lidOpen: true };
+  n = note(n, `Piatto: ${bomb.plateLines.join(" · ")}`);
+  if (!bomb.gates.receiver) {
+    n = { ...n, decoded: { ...n.decoded, morse: true } };
+    const ciak = bomb.plateLines.find((l) => l.startsWith("CIAK"));
+    if (ciak) n = note(n, `Terza cifra dal piatto: ${ciak.replace("CIAK ", "")}`);
+  }
+  return say(n, `${cap(bomb.cover)} aperto. I moduli di scena sono raggiungibili.`, "good");
+}
+
+function onTilt(s: RunState): RunState {
+  if (!live(s) || !s.bomb) return { ...s, selectedId: "tilt" };
+  const bomb = s.bomb;
+  let n: RunState = { ...s, selectedId: "tilt" };
+  if (!bomb.gates.tilt) return say(n, "In questa scena non c'è un grano d'inclinazione.", "info");
+  if (!n.lidOpen) return say(n, "La vite di blocco è sotto la copertura.", "warn");
+  if (n.tool === "cacciavite") return say(n, "La vite del grano è una brugola. Il cacciavite delle chiusure non entra.", "warn");
+  if (n.tool !== "brugola") return say(n, "La vite di blocco vuole la brugola.", "info");
+  if (n.tiltLocked) return say(n, "Assetto già bloccato. Puoi maneggiare l'ordigno.", "info");
+  return say({ ...n, tiltLocked: true }, "Vite di blocco serrata. Il grano non chiude più il contatto.", "good");
+}
+
+function onKeypad(s: RunState, key: string): RunState {
+  if (!live(s) || !s.bomb?.gates.keypad) return s;
+  if (key === "C") return say({ ...s, keypad: "" }, "Tastierino azzerato.", "info");
+  if (key === "OK") {
+    if (s.keypad.length !== 4) return say(s, "Servono quattro cifre.", "warn");
+    if (s.keypad === s.bomb.code) {
+      let n: RunState = { ...s, codeUnlocked: true, keypad: "" };
+      n = say(n, "Codice accettato. Lo sportello sulla linea di scena si ritrae.", "good");
+      if (s.bomb.gates.receiver) n = say(n, "L'antenna smette di rubare secondi.", "info");
+      return n;
+    }
+    const left = s.mode === "ripresa" ? Math.max(1, s.secondsLeft - 10) : s.secondsLeft;
+    return say(
+      { ...s, keypad: "", mistakes: s.mistakes + 1, secondsLeft: left },
+      "Codice rifiutato. Il copione non perdona a orecchio.",
+      "warn",
+    );
+  }
+  if (!/^[0-9]$/.test(key)) return s;
+  if (s.keypad.length >= 4) return s;
+  return { ...s, keypad: s.keypad + key };
+}
+
+function onDial(s: RunState, index: 0 | 1 | 2, dir: 1 | -1): RunState {
+  if (!live(s) || !s.bomb?.dial) return s;
+  if (!s.lidOpen) return say(s, "Il contatore B è sotto la copertura.", "warn");
+  const digits: [number, number, number] = [...s.dialDigits];
+  digits[index] = (digits[index] + dir + 10) % 10;
+  const matched = digits.every((d, i) => d === s.bomb!.dial![i]);
+  let n: RunState = { ...s, dialDigits: digits, dialMatched: matched };
+  if (matched && !s.dialMatched) n = say(n, "Contatore B allineato. Il salto di tempo non arriverà.", "good");
+  return n;
+}
+
+function onRotate(s: RunState, dx: number, dz: number): RunState {
+  if (!s.bomb) return s;
+  if (s.tool !== "maneggio") return s;
+  if (s.phase !== "play") return s;
+  const x = clamp(s.attitude.x + dx, -0.9, 0.9);
+  const z = clamp(s.attitude.z + dz, -0.9, 0.9);
+  const n: RunState = { ...s, attitude: { x, z } };
+  if (!s.bomb.gates.tilt || s.tiltLocked) return n;
+  const mag = Math.hypot(x, z);
+  if (mag > TILT_LIMIT) {
+    return boom(n, "Il grano di scena ha toccato il contatto. L'ordigno andava bloccato prima del maneggio.");
+  }
+  return n;
+}
+
+function onListen(s: RunState): RunState {
+  if (!live(s) || !s.bomb) return s;
+  if (s.tool !== "stetoscopio") return say(s, "Serve lo stetoscopio di scena. L'orecchio nudo non tiene il tempo del battito.", "warn");
+  if (s.listenLeft > 0) return s;
+  if (s.selectedId === "leds") {
+    if (!s.lidOpen) return say(s, "Il cluster è dentro. Apri prima.", "warn");
+    if (s.ledsBlind && !s.decoded.blinks) return say(s, "Il cluster è muto: il filo dell'onda è già tagliato.", "warn");
+    return say({ ...s, listenLeft: 2.6, listenKind: "leds" }, "Conti i lampeggi del cluster…", "info");
+  }
+  if (s.selectedId === "receiver") {
+    if (!s.bomb.gates.receiver) return say(s, "Nessuna antenna in questa scena.", "warn");
+    return say({ ...s, listenLeft: 2.6, listenKind: "receiver" }, "Ascolti il battito dell'antenna…", "info");
+  }
+  return say(s, "Seleziona il cluster o il ricevitore, poi decodifica.", "info");
+}
+
+function finishListen(s: RunState): RunState {
+  if (!s.bomb) return { ...s, listenLeft: 0, listenKind: null };
+  if (s.listenKind === "leds") {
+    const n = note(
+      { ...s, listenLeft: 0, listenKind: null, decoded: { ...s.decoded, blinks: true } },
+      `Cluster — seconda cifra: ${s.bomb.ledBlink}`,
+    );
+    return say(n, `Il cluster chiude il ciclo su ${s.bomb.ledBlink}. Seconda cifra.`, "good");
+  }
+  if (s.listenKind === "receiver") {
+    const digit = s.bomb.code[2] ?? "?";
+    const n = note(
+      { ...s, listenLeft: 0, listenKind: null, decoded: { ...s.decoded, morse: true } },
+      `Antenna — terza cifra: ${digit}`,
+    );
+    return say(n, `L'antenna batte un ${digit}. Terza cifra.`, "good");
+  }
+  return { ...s, listenLeft: 0, listenKind: null };
+}
+
+function onHint(s: RunState): RunState {
+  if (!live(s) || !s.bomb) return s;
+  if (s.hintsUsed >= 4) return say(s, "Il suggeritore ha finito le battute.", "warn");
+  const text = hintText(s);
+  let n: RunState = { ...s, hintsUsed: s.hintsUsed + 1 };
+  if (n.mode === "ripresa") {
+    n = { ...n, secondsLeft: Math.max(1, n.secondsLeft - 18) };
+  }
+  n = note(n, `Suggerimento: ${text}`);
+  return say(n, text, "warn");
+}
+
+function hintText(s: RunState): string {
+  const b = s.bomb!;
+  if (b.gates.pressure && !s.pressureShunted) {
+    return "Ponticella SW-A e SW-B, i due morsetti sulla chiusura, prima di usare il cacciavite.";
+  }
+  if (!s.lidOpen) return `Cacciavite sulle chiusure: il ${b.cover} si apre solo con la sicura inserita.`;
+  if (b.gates.cap && !s.capDumped) {
+    return "Ponticella COND + sul CARICO FITTIZIO. Mai sull'INNESCO.";
+  }
+  if (b.gates.keypad && !s.codeUnlocked) {
+    if (!s.decoded.uv) return "Accendi l'UV: la prima cifra è fuori dal guscio, non su un filo.";
+    if (!s.decoded.blinks) return "Decodifica il cluster: il numero di lampeggi è la seconda cifra.";
+    if (!s.decoded.morse && b.gates.receiver) return "Decodifica l'antenna: batte la terza cifra e, finché non inserisci il codice, ruba secondi.";
+    if (!s.decoded.morse && !b.gates.receiver) return "Senza antenna, l'unica riga vera del piatto è quella che inizia con CIAK.";
+    return `Quarta cifra = fili meno trappole. Contano i tratti sul percorso BAT + → INNESCO, giunti compresi. I rami ciechi no. Codice: ${b.code}.`;
+  }
+  const sicura = b.wires.find((w) => w.role === "sicura");
+  const dialNote =
+    b.gates.dial && b.dial && !s.dialMatched
+      ? ` Contatore B opzionale: ${b.dial[0]}-${b.dial[1]}-${b.dial[2]}.`
+      : "";
+  const tiltNote = b.gates.tilt && !s.tiltLocked ? " Serra il grano prima di maneggiare." : "";
+  return sicura
+    ? `La linea di scena è il ${colorName(sicura.color).toLowerCase()} verso l'INIBITORE, non un tratto che il multimetro mette fra BAT + e INNESCO. Taglialo con la tronchese.${dialNote}${tiltNote}`
+    : "Cerca il filo che il multimetro chiama linea di scena.";
+}
+
+export interface Stage {
+  id: string;
+  label: string;
+  done: boolean;
+  optional?: boolean;
+}
+
+export function stages(s: RunState): Stage[] {
+  const b = s.bomb;
+  if (!b) return [];
+  const out: Stage[] = [];
+  if (b.gates.pressure) out.push({ id: "sw", label: "Sicura copertura", done: s.pressureShunted });
+  out.push({ id: "open", label: "Apertura", done: s.lidOpen });
+  if (b.gates.tilt) out.push({ id: "tilt", label: "Blocco grano", done: s.tiltLocked, optional: true });
+  if (b.gates.cap) out.push({ id: "cap", label: "Scarica di scena", done: s.capDumped });
+  if (b.gates.keypad) out.push({ id: "code", label: "Codice", done: s.codeUnlocked });
+  if (b.gates.dial) out.push({ id: "dial", label: "Contatore B", done: s.dialMatched, optional: true });
+  out.push({ id: "cut", label: "Taglio inibitore", done: s.phase === "safe" });
+  return out;
+}
+
+export function formatClock(total: number): string {
+  const s = Math.max(0, Math.ceil(total));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+}
+
+export function tiltRatio(s: RunState): number {
+  if (!s.bomb?.gates.tilt || s.tiltLocked) return 0;
+  return Math.min(1, Math.hypot(s.attitude.x, s.attitude.z) / TILT_LIMIT);
+}
+
+function clamp(v: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, v));
+}
+
+function cap(word: string) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+export function findWire(bomb: Bomb | null, id: string | null): Wire | null {
+  if (!bomb || !id) return null;
+  return bomb.wires.find((w) => w.id === id) ?? null;
+}

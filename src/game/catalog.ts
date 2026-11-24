@@ -1,0 +1,179 @@
+export interface Article {
+  id: string;
+  title: string;
+  kicker: string;
+  body: string[];
+}
+
+export const DISCLAIMER =
+  "Archivio di scena. Ogni pezzo è un oggetto di finzione, scritto per somigliare ai film: nomi, percorsi e «metodi» valgono solo dentro questo copione. Non descrivono ordigni reali, né come si costruiscono, né come si neutralizzano fuori da un set.";
+
+export const ARTICLES: Article[] = [
+  {
+    id: "regole",
+    title: "Come si legge una scena",
+    kicker: "Protocollo",
+    body: [
+      "Il cinema ha insegnato una bugia comoda: il rosso è sempre quello giusto, o sempre quello sbagliato. Qui il colore è un costume. Due fili possono vestirsi uguale e andare in posti opposti.",
+      "Si risolve seguendo i morsetti, non il colore. L'INNESCO di scena è il tubo rosso etichettato come tale. L'INIBITORE è la linea che, a relè aperto, ferma il copione. Una TRAPPOLA è ogni tratto che sta su un percorso da BAT + all'INNESCO, anche se si spezza su un giunto. Un'ESCA è un ritorno morto oppure un ramo cieco appeso al giunto: si vede l'innesco da lì, ma la cella non ci passa.",
+      "Ogni seme ricostruisce l'ordigno: archetipo, guardie, gemelli di colore, codice. La scena è sempre risolvibile se si misurano i tratti uno per uno.",
+      "L'orbita, lo zoom e il pan muovono la camera. Il maneggio muove l'oggetto. Solo il secondo può far rotolare il grano d'inclinazione.",
+    ],
+  },
+  {
+    id: "integrazione",
+    title: "Integrazione dei moduli",
+    kicker: "Schema",
+    body: [
+      "Cella di palco: il polo positivo alimenta il timer e, nelle scene lunghe, parte verso un giunto. Dal giunto un tratto continua all'innesco e un altro, spesso dello stesso colore, muore su un morsetto del bus. Tagliare l'alimentazione spegne il display LCD. Il tempo, da copione, continua al buio.",
+      "Condensatore di scena: finché è carico, COND + è vincolato a BAT +. Il CARICO FITTIZIO assorbe la scarica in un clic da studio. Se tagli l'alimentazione mentre quel vincolo è ancora chiuso, la scarica di copione finisce sull'innesco.",
+      "Relè del codice: sta in parallelo alla linea dell'inibitore. Finché il codice non è accettato, tagliare quel filo non apre nulla. A relè aperto, quel tratto è l'unica continuità rimasta.",
+      "Codice: quattro cifre. Prima sotto UV, sul guscio. Seconda, i lampeggi del cluster. Terza, il battito dell'antenna oppure la riga CIAK sul piatto, se l'antenna non c'è. Quarta = numero di fili meno numero di trappole (i segmenti sul percorso cella → innesco, rami ciechi esclusi).",
+      "Il piatto inciso mente negli imperativi («taglia il rosso»). Dice la verità nella formula e, se presente, nella riga CIAK.",
+    ],
+  },
+  {
+    id: "timer",
+    title: "Timer LCD",
+    kicker: "Modulo",
+    body: [
+      "Il display a sette segmenti è il cliché che tiene la scena. In ripresa scende davvero. In prova generale resta fermo, per studiare.",
+      "Sotto i dieci secondi il bip sale di tono. Se l'alimentazione viene tagliata a condensatore già scarico, il vetro si spegne ma il conteggio no: lo leggi ancora nel bordo dello schermo.",
+      "Un'antenna non zittita ruba secondi a intervalli. Il contatore B, se ignorato oltre metà tempo, ne brucia venticinque in un colpo.",
+    ],
+  },
+  {
+    id: "fili",
+    title: "Fili e gemelli",
+    kicker: "Modulo",
+    body: [
+      "Cinque ruoli, mai scritti sul isolamento: sicura (inibitore), trappola (segmento fra cella e innesco), esca (ritorno morto o ramo cieco), alimentazione (cella verso timer), senso (antenna verso cluster).",
+      "Dalla caratterista in su c'è un giunto. Due fili possono uscirne vestiti uguale: uno continua il percorso, l'altro è un ramo cieco. Il protagonista ne ha due. Una perla gialla sul filo conduce in un verso solo: il giro inverso, se esiste, passa da un'altra strada.",
+      "La sicura non si lascia aprire finché il relè del codice è chiuso in parallelo, il condensatore è ancora sulla cella, o la copertura è giù. Il primo taglio forzato non interrompe la linea e costa secondi. Il secondo chiude la scena.",
+      "Le esche si possono tagliare: il percorso da BAT + all'INNESCO non le usa, ed è proprio il punto.",
+    ],
+  },
+  {
+    id: "pressione",
+    title: "Microswitch di copertura",
+    kicker: "Guardia",
+    body: [
+      "SW-A e SW-B stanno sulla chiusura, fuori. Sono il cliché della valigetta che non va aperta di slancio. Un ponticello fra i due tiene aperto il contatto di scena.",
+      "Il cacciavite sulle chiusure, senza quel ponticello, fa scattare il finale. Con il ponticello, il coperchio, la calotta o il vetro si alza e scopre il banco.",
+      "I morsetti interni non si toccano a copertura chiusa. L'antenna e il piatto, spesso, sì.",
+    ],
+  },
+  {
+    id: "condensatore",
+    title: "Condensatore di scena",
+    kicker: "Modulo",
+    body: [
+      "Cilindro con banda ambra e, accanto, un blocchetto marcato CARICO FITTIZIO. Non è un componente da laboratorio vero: è il «prima scarica, poi taglia» dei thriller.",
+      "Multimetro fra COND + e BAT +: stesso nodo, finché non scarichi. Fra COND + e CARICO: aperto, ed è lì che va il ponticello. Fra COND + e INNESCO il misuratore può vedere un giro attraverso la cella; un ponticello diretto, comunque, chiude la scena.",
+      "Ponticello fra COND + e INNESCO, o fra BAT + e INNESCO: finale immediato. Il multimetro, su quella coppia, lo dice prima.",
+    ],
+  },
+  {
+    id: "innesco",
+    title: "Innesco e inibitore",
+    kicker: "Modulo",
+    body: [
+      "L'innesco di scena è un tubo in una staffa, con due morsetti a vista: INNESCO e INIBITORE. Dentro, un ponte di copione: un filo che si accende se la cella lo raggiunge. Non è un componente vero e non ha una soglia da laboratorio.",
+      "A riposo il ponte sta basso. Se il condensatore è ancora carico, il minimo è più alto: la scarica di scena lo tiene tiepido. L'inibitore, finché il filo è intero, gli impedisce di correre. Tagliare una trappola, o ponticellare il tubo, non lo scalda: chiude la scena subito.",
+      "Forzare l'inibitore con una guardia ancora aperta ferisce il ponte. Da lì sale da solo, circa nove secondi fino a saturazione. Si raffredda solo sistemando la guardia che l'ha ferito: scaricare il condensatore, o aprire il relè del codice. Un secondo tentativo forzato non aspetta la salita.",
+      "Il multimetro, su INNESCO o INIBITORE, legge la percentuale. I due morsetti del tubo non si parlano fra loro. Un ping dell'antenna, se il ponte è già in salita, gli dà una spinta. Non si smonta il tubo.",
+    ],
+  },
+  {
+    id: "codice",
+    title: "Tastierino",
+    kicker: "Guardia",
+    body: [
+      "Quattro cifre, poi OK. Giusto: lo sportello sulla sicura si ritrae e l'antenna, se c'era, smette di rubare tempo. Sbagliato: il codice si cancella e la ripresa perde dieci secondi.",
+      "Le cifre non stanno mai tutte nello stesso posto. UV, cluster, antenna o riga CIAK, formula dei fili. Il suggeritore, a pagamento di secondi, può arrivare a dirtele.",
+      "Puoi comporre dal dossier anche se il vetro è ancora chiuso. Lo sportello fisico, però, libera il filo solo quando il banco è aperto e le altre guardie sono a posto.",
+    ],
+  },
+  {
+    id: "tilt",
+    title: "Grano d'inclinazione",
+    kicker: "Rischio",
+    body: [
+      "Un tubetto di vetro, una pallina da film. Se maneggi l'ordigno oltre la tacca, la pallina chiude il contatto di scena.",
+      "La camera può girarci intorno quanto vuole: l'assetto dell'oggetto non cambia. Il maneggio, invece, è la mano sul prop. Prima si serra la vite di blocco con la brugola, poi si inclina.",
+      "La vista esplosa scosta i moduli senza ruotare il banco: non sveglia il grano. In comparsa, spesso, il grano non è nemmeno in scena.",
+    ],
+  },
+  {
+    id: "antenna",
+    title: "Ricevitore di copione",
+    kicker: "Modulo",
+    body: [
+      "Un'antenna che batte una cifra, la terza del codice. Si decodifica dal dossier, col ricevitore selezionato: due secondi e mezzo di ascolto.",
+      "Finché il codice non è inserito, un ping ruba secondi. Tagliare il filo di senso zittisce anche il cluster: fallo solo dopo aver contato i lampeggi, se ti serve ancora la seconda cifra.",
+      "Se la scena non ha antenna, la terza cifra è la riga CIAK sul piatto. Le altre righe imperative sono bugie da locandina.",
+    ],
+  },
+  {
+    id: "cluster",
+    title: "Cluster di lampeggi",
+    kicker: "Modulo",
+    body: [
+      "Una fila di spie che corre e si ferma. Il numero di lampi nel ciclo è la seconda cifra. Puoi contarli a vista o premere decodifica col cluster selezionato.",
+      "Il filo di senso lo alimenta. Tagliato, le spie muoiono. Se non avevi ancora la cifra, ti resta solo un suggerimento.",
+    ],
+  },
+  {
+    id: "contatore",
+    title: "Contatore B",
+    kicker: "Opzionale",
+    body: [
+      "Tre ruote, solo nelle scene da protagonista. Non blocca il taglio. Se a metà tempo non è allineato, brucia venticinque secondi.",
+      "Da sinistra: numero di fili-esca, prima cifra (UV), seconda cifra (cluster). Le esche sono i ritorni morti e i rami ciechi: il multimetro non li mette fra BAT + e l'INNESCO.",
+    ],
+  },
+  {
+    id: "strumenti",
+    title: "Strumenti di mano",
+    kicker: "Banco",
+    body: [
+      "La borsa è divisa in mano, misura e banco. Ogni pezzo del prop vuole il suo attrezzo: chiusure il cacciavite, grano la brugola, fili la tronchese, battiti lo stetoscopio, guardie i coccodrilli.",
+      "Le pinzette staccano un ponticello. Se la copertura è già aperta e togli i coccodrilli dal microswitch, il contatto chiude la scena.",
+      "Il nastro giallo segna un filo già misurato: non cambia il circuito, tiene la memoria quando i colori si ripetono.",
+      "La pila di servizio è una sola. Riaccende il display se hai tagliato l'alimentazione a condensatore già scarico. Il filo resta aperto.",
+      "Sotto i quindici secondi il vetro pulsa e l'ordigno trema in mano. L'antenna, se non è zittita, avvisa il ping prima di rubare secondi.",
+      "Quattro suggerimenti. In ripresa ognuno costa diciotto secondi.",
+    ],
+  },
+  {
+    id: "archetipi",
+    title: "Tre carrozzerie",
+    kicker: "Scena",
+    body: [
+      "Valigetta del regista: il vetro sul tempo, le chiusure davanti, il piatto in facciata. È l'inquadratura che il pubblico riconosce prima ancora del dialogo.",
+      "Cilindro di scena: tubo fresato in culla, calotta che si alza, moduli sul piano lavorato. Sembra un pezzo d'officina, resta un attrezzo da troupe.",
+      "Console da regia: cuneo inclinato, vetro di plancia, lo stesso banco logico con un'altra silhouette. La procedura non cambia col vestito: cambiano solo coperchio e ombre.",
+    ],
+  },
+];
+
+export const DIFFICULTY_COPY: Record<
+  string,
+  { label: string; time: string; text: string }
+> = {
+  comparsa: {
+    label: "Comparsa",
+    time: "6:00",
+    text: "Quattro fili diretti. Il multimetro dice se il tratto sta fra cella e innesco.",
+  },
+  caratterista: {
+    label: "Caratterista",
+    time: "5:00",
+    text: "Un giunto, una perla di senso, un ramo cieco dello stesso colore, relè del codice.",
+  },
+  protagonista: {
+    label: "Protagonista",
+    time: "3:30",
+    text: "Due giunti, due perle, due gemelli. Il percorso si legge, non si indovina.",
+  },
+};

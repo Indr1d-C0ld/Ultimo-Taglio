@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #100e0c;
+  --color-bg-raised: #1a1613;
+  --color-surface: #241f1a;
+  --color-surface-2: #312a24;
+  --color-fg: #f4efe6;
+  --color-muted: #a89884;
+  --color-faint: #6f6256;
+  --color-line: #3c342c;
+  --color-accent: #e23b2b;
+  --color-accent-dim: #6e241c;
+  --color-lcd: #ffb020;
+  --color-ok: #d6e38a;
+  --font-display: "Oswald", "Arial Narrow", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Literata", Georgia, serif;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+}
+
+.app-root {
+  height: 100dvh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 20% -10%, color-mix(in srgb, var(--color-accent) 18%, transparent), transparent 42%),
+    var(--color-bg);
+}
+
+.grain {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  opacity: 0.14;
+  mix-blend-mode: overlay;
+  background-image: radial-gradient(var(--color-fg) 0.6px, transparent 0.6px);
+  background-size: 3px 3px;
+}
+
+.lcd-readout {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  color: var(--color-lcd);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--color-lcd) 55%, transparent);
+}
+
+.lcd-hot {
+  color: var(--color-accent);
+  animation: lcd-hot 0.7s ease-in-out infinite;
+}
+
+@keyframes lcd-hot {
+  0%,
+  100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.flash-boom {
+  animation: flash-boom 700ms ease-out;
+}
+
+.flash-safe {
+  animation: flash-safe 800ms ease-out;
+}
+
+@keyframes flash-boom {
+  0% { opacity: 0.85; }
+  100% { opacity: 0; }
+}
+
+@keyframes flash-safe {
+  0% { opacity: 0.55; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flash-boom,
+  .flash-safe,
+  .lcd-hot,
+  .grain {
+    animation: none;
+  }
+}
