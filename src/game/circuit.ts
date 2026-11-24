@@ -31,20 +31,35 @@ export function netEdges(bomb: Bomb, view: NetView): NetEdge[] {
   const cut = new Set(view.cutIds);
   const edges: NetEdge[] = [];
   for (const w of bomb.wires) {
-    if (cut.has(w.id)) continue;
+    if (cut.has(w.id) || w.open) continue;
     edges.push({ id: w.id, a: w.a, b: w.b, kind: "wire", diode: w.diode });
   }
   for (const j of view.jumpers) {
     edges.push({ id: `jumper:${j.a}:${j.b}`, a: j.a, b: j.b, kind: "jumper", diode: null });
   }
   if (bomb.gates.keypad && !view.codeUnlocked) {
-    const sicura = bomb.wires.find((w) => w.role === "sicura");
-    if (sicura) edges.push({ id: "relay-code", a: sicura.a, b: sicura.b, kind: "relay", diode: null });
+    edges.push({ id: "relay-code", a: "det-inhibit", b: "bat-neg", kind: "relay", diode: null });
   }
   if (bomb.gates.cap && !view.capDumped) {
     edges.push({ id: "bond-cap", a: "cap-hot", b: "bat-pos", kind: "bond", diode: null });
   }
   return edges;
+}
+
+/** Edges of a bare wire list, before any bomb exists. Used to read roles off a fresh topology. */
+export function wireEdges(wires: Wire[]): NetEdge[] {
+  return wires
+    .filter((w) => !w.open)
+    .map((w) => ({ id: w.id, a: w.a, b: w.b, kind: "wire" as const, diode: w.diode }));
+}
+
+function hardEdges(bomb: Bomb, view: NetView): NetEdge[] {
+  return netEdges(bomb, view).filter((e) => e.kind === "wire" || e.kind === "jumper");
+}
+
+/** The inhibitor still sees BAT − through wires or clips. The code relay does not count. */
+export function lineClosed(bomb: Bomb, view: NetView): boolean {
+  return directedPath(hardEdges(bomb, view), "det-inhibit", "bat-neg") !== null;
 }
 
 export function directedPath(edges: NetEdge[], src: string, dst: string): Trail | null {
@@ -110,13 +125,19 @@ function directWire(bomb: Bomb, view: NetView, a: string, b: string): Wire | und
 export function wireSeat(bomb: Bomb, view: NetView, wireId: string): string {
   const wire = bomb.wires.find((w) => w.id === wireId);
   if (!wire) return "";
+  if (wire.open) return "Anima interrotta sotto l'isolante: non conduce in nessun verso. Tratto morto, fuori da ogni percorso.";
   const present: NetView = { ...view, cutIds: view.cutIds.filter((id) => id !== wireId) };
   const edges = netEdges(bomb, present);
+  const hard = hardEdges(bomb, present);
+  const line = edgeCarries(hard, "det-inhibit", "bat-neg", wire.id);
   const live = edgeCarries(edges, "bat-pos", "det-in", wire.id);
   const timer = edgeCarries(edges, "bat-pos", "timer-vin", wire.id);
   const cluster = edgeCarries(edges, "rx-out", "led-in", wire.id) || edgeCarries(edges, "led-in", "rx-out", wire.id);
   const without = edges.filter((e) => e.id !== wire.id);
-  const spur = !live && (!!directedPath(without, wire.a, "det-in") || !!directedPath(without, wire.b, "det-in"));
+  const anchors = ["det-in", "det-inhibit", "bat-neg", "bat-pos"];
+  const touches = (end: string) =>
+    anchors.some((t) => end === t || !!directedPath(without, end, t) || !!directedPath(without, t, end));
+  const spur = !live && !line && (touches(wire.a) || touches(wire.b));
   const bead = wire.diode ? " Su questo tratto una perla lascia aperto il verso opposto." : "";
   if (live) return `Sul percorso BAT + → INNESCO: segmento di trappola.${bead}`;
   if (timer) {
@@ -127,21 +148,26 @@ export function wireSeat(bomb: Bomb, view: NetView, wireId: string): string {
     return `Fra cella e TIMER.${hot}${bead}`;
   }
   if (cluster) return `Fra RX e CLUSTER. È l'onda dei lampeggi.${bead}`;
-  if (wire.role === "sicura" || wire.a === "det-inhibit" || wire.b === "det-inhibit") {
-    return `Linea dell'INIBITORE. Non sta sul percorso dell'innesco.${bead}`;
+  if (line) {
+    const spare = directedPath(
+      hard.filter((e) => e.id !== wire.id),
+      "det-inhibit",
+      "bat-neg",
+    );
+    const twin = spare
+      ? " C'è un secondo ramo in parallelo: aprire solo questo non basta."
+      : " È l'unica strada rimasta: aprirla è il taglio.";
+    return `Sulla linea INIBITORE → BAT −. Non sta sul percorso dell'innesco.${twin}${bead}`;
   }
-  if (spur) return `Ramo cieco. Il giunto vede l'innesco, ma la cella non passa di qui.${bead}`;
+  if (spur) return `Ramo cieco. È appeso a un percorso, ma la corrente non passa di qui.${bead}`;
   return `Ritorno morto: fuori da cella, innesco, timer e cluster.${bead}`;
 }
 
-function relayClause(bomb: Bomb, view: NetView, a: string, b: string): string {
-  if (!bomb.gates.keypad) return "";
-  const sicura = bomb.wires.find((w) => w.role === "sicura");
-  if (!sicura) return "";
-  const ends = new Set([sicura.a, sicura.b]);
-  if (!ends.has(a) || !ends.has(b)) return "";
-  if (!view.codeUnlocked) return " Relè del codice chiuso in parallelo: il filo, da solo, non apre la linea.";
-  return " Relè del codice aperto: resta solo questo tratto.";
+function relayClause(bomb: Bomb, view: NetView, wire: Wire | undefined): string {
+  if (!bomb.gates.keypad || !wire || wire.open) return "";
+  if (!edgeCarries(hardEdges(bomb, view), "det-inhibit", "bat-neg", wire.id)) return "";
+  if (!view.codeUnlocked) return " Relè del codice chiuso in parallelo alla linea: nessun taglio la apre finché non entra il codice.";
+  return " Relè del codice aperto: la linea passa solo dai fili.";
 }
 
 function routePhrase(trail: Trail): string {
@@ -155,7 +181,9 @@ function routePhrase(trail: Trail): string {
   if (trail.edges.length === 1 && one?.kind === "bond") {
     return "Vincolo interno: il condensatore sta sulla cella finché non scarica sul carico fittizio.";
   }
-  if (trail.edges.length === 1 && one?.kind === "relay") return "Solo il contatto del relè. Il filo non conduce.";
+  if (trail.edges.length === 1 && one?.kind === "relay") {
+    return "Contatto del relè del codice: finché è chiuso tiene unita la linea, qualunque filo tagli.";
+  }
   const via = trail.nodes.slice(1, -1).map((id) => terminalLabel(id));
   const viaTxt = via.length ? ` via ${via.join(" · ")}` : "";
   return `Continuità in ${trail.edges.length} passi${viaTxt}${tag}.`;
@@ -163,6 +191,9 @@ function routePhrase(trail: Trail): string {
 
 export function probeReading(bomb: Bomb, view: NetView, a: string, b: string): { text: string; wireId?: string } {
   const wire = directWire(bomb, view, a, b);
+  if (wire?.open) {
+    return { text: `Aperto nei due versi, eppure il filo è intero. ${wireSeat(bomb, view, wire.id)}`, wireId: wire.id };
+  }
   if (wire) {
     const aToB = conducts(wire, a, b);
     const bToA = conducts(wire, b, a);
@@ -180,7 +211,7 @@ export function probeReading(bomb: Bomb, view: NetView, a: string, b: string): {
       if (directedPath(edges, from, to)) loop = " Il verso opposto esiste solo facendo il giro, non su questa perla.";
     }
     return {
-      text: `${sense} Tratto diretto. ${wireSeat(bomb, view, wire.id)}${loop}${relayClause(bomb, view, a, b)}`,
+      text: `${sense} Tratto diretto. ${wireSeat(bomb, view, wire.id)}${loop}${relayClause(bomb, view, wire)}`,
       wireId: wire.id,
     };
   }
@@ -200,5 +231,5 @@ export function probeReading(bomb: Bomb, view: NetView, a: string, b: string): {
   const seat = isolated
     ? wireSeat(bomb, view, trail.edges[0]!.id)
     : "Non è un singolo tratto: sonda i due capi di un filo per sapere se la cella ci passa.";
-  return { text: `${sense} ${routePhrase(trail)} ${seat}${relayClause(bomb, view, a, b)}` };
+  return { text: `${sense} ${routePhrase(trail)} ${seat}` };
 }

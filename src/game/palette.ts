@@ -33,7 +33,6 @@ export const TERMINAL_LABELS: Record<string, string> = {
   "led-in": "CLUSTER",
   "sw-a": "SW-A",
   "sw-b": "SW-B",
-  "h-sic": "BUS SICURA",
 };
 
 export function terminalLabel(id: string): string {

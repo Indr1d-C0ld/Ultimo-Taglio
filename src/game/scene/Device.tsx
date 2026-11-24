@@ -764,8 +764,10 @@ function HarnessWires() {
 
   const shield = useMemo(() => {
     if (!bomb || unlocked) return null;
-    const wire = bomb.wires.find((w) => w.role === "sicura");
-    if (!wire || cutIds.includes(wire.id)) return null;
+    const wire = bomb.wires.find(
+      (w) => w.role === "sicura" && !cutIds.includes(w.id) && (w.a === "det-inhibit" || w.b === "det-inhibit"),
+    );
+    if (!wire) return null;
     const a = pointOf(bomb, wire.a, exploded);
     const b = pointOf(bomb, wire.b, exploded);
     if (!a || !b) return null;

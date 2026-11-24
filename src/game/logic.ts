@@ -1,4 +1,4 @@
-import { probeReading, wireSeat, type NetView } from "./circuit";
+import { lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
 import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
 import { generateBomb } from "./generate";
 import { fitLine } from "./kit";
@@ -446,7 +446,10 @@ function onWire(s: RunState, id: string): RunState {
   if (n.tool === "pinzette") return say(n, "Le pinzette staccano i coccodrilli, non i fili.", "info");
   if (n.tool !== "tronchese") {
     if (n.tool === "occhio") return n;
-    return say(n, `${colorName(wire.color)}, da ${terminalLabel(wire.a)} a ${terminalLabel(wire.b)}. Impugna la tronchese per tagliare.`, "info");
+    const ends = n.knownWireIds.includes(id)
+      ? `da ${terminalLabel(wire.a)} a ${terminalLabel(wire.b)}`
+      : "capi non ancora misurati";
+    return say(n, `${colorName(wire.color)}, ${ends}. Impugna la tronchese per tagliare.`, "info");
   }
   if (!n.lidOpen) return say(n, `Non raggiungi i fili con il ${bomb.cover} chiuso.`, "warn");
   if (n.cutIds.includes(id)) return say(n, "Questo tratto è già tagliato.", "info");
@@ -455,7 +458,7 @@ function onWire(s: RunState, id: string): RunState {
     return boom(n, `Il ${colorName(wire.color).toLowerCase()} stava sul percorso dalla cella all'innesco. Il colore non c'entra, il verso sì.`);
   }
   if (wire.role === "esca") {
-    n = { ...n, cutIds: [...n.cutIds, id] };
+    n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) };
     return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
   }
   if (wire.role === "senso") {
@@ -514,12 +517,24 @@ function onWire(s: RunState, id: string): RunState {
     );
   }
 
-  n = { ...n, cutIds: [...n.cutIds, id], phase: "safe", bridge: 0, bridgeHot: false, bridgeCause: null };
+  n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) };
+  if (lineClosed(bomb, viewOf(n))) {
+    return say(
+      n,
+      `${colorName(wire.color)} aperto, ma l'INIBITORE vede ancora BAT − da un altro ramo. La linea resta chiusa.`,
+      "warn",
+    );
+  }
+  n = { ...n, phase: "safe", bridge: 0, bridgeHot: false, bridgeCause: null };
   const left = n.secondsLeft;
   return {
     ...say(n, "Inibitore aperto. L'innesco di scena resta muto. Il timer si ferma.", "good"),
     endReason: `Disinnescato con ${formatClock(left)} ancora sul display.`,
   };
+}
+
+function know(s: RunState, id: string): string[] {
+  return s.knownWireIds.includes(id) ? s.knownWireIds : [...s.knownWireIds, id];
 }
 
 function onLatch(s: RunState): RunState {
@@ -667,15 +682,15 @@ function hintText(s: RunState): string {
     if (!s.decoded.morse && !b.gates.receiver) return "Senza antenna, l'unica riga vera del piatto è quella che inizia con CIAK.";
     return `Quarta cifra = fili meno trappole. Contano i tratti sul percorso BAT + → INNESCO, giunti compresi. I rami ciechi no. Codice: ${b.code}.`;
   }
-  const sicura = b.wires.find((w) => w.role === "sicura");
   const dialNote =
     b.gates.dial && b.dial && !s.dialMatched
       ? ` Contatore B opzionale: ${b.dial[0]}-${b.dial[1]}-${b.dial[2]}.`
       : "";
   const tiltNote = b.gates.tilt && !s.tiltLocked ? " Serra il grano prima di maneggiare." : "";
-  return sicura
-    ? `La linea di scena è il ${colorName(sicura.color).toLowerCase()} verso l'INIBITORE, non un tratto che il multimetro mette fra BAT + e INNESCO. Taglialo con la tronchese.${dialNote}${tiltNote}`
-    : "Cerca il filo che il multimetro chiama linea di scena.";
+  const line = b.wires
+    .filter((w) => w.role === "sicura" && !s.cutIds.includes(w.id))
+    .map((w) => `${colorName(w.color).toLowerCase()} (${terminalLabel(w.a)} → ${terminalLabel(w.b)})`);
+  return `La linea INIBITORE → BAT − passa da: ${line.join(", ")}. Aprila con la tronchese: se resta un ramo in parallelo, serve un secondo taglio.${dialNote}${tiltNote}`;
 }
 
 export interface Stage {

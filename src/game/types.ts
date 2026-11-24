@@ -57,6 +57,8 @@ export interface Wire {
   b: string;
   /** Theatrical one-way bead. "a-b" conducts only from a toward b. */
   diode: "a-b" | "b-a" | null;
+  /** Core broken under the insulation: looks whole, conducts nothing. Only the meter tells. */
+  open: boolean;
 }
 
 export interface Gates {

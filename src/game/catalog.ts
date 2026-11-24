@@ -15,8 +15,9 @@ export const ARTICLES: Article[] = [
     kicker: "Protocollo",
     body: [
       "Il cinema ha insegnato una bugia comoda: il rosso è sempre quello giusto, o sempre quello sbagliato. Qui il colore è un costume. Due fili possono vestirsi uguale e andare in posti opposti.",
-      "Si risolve seguendo i morsetti, non il colore. L'INNESCO di scena è il tubo rosso etichettato come tale. L'INIBITORE è la linea che, a relè aperto, ferma il copione. Una TRAPPOLA è ogni tratto che sta su un percorso da BAT + all'INNESCO, anche se si spezza su un giunto. Un'ESCA è un ritorno morto oppure un ramo cieco appeso al giunto: si vede l'innesco da lì, ma la cella non ci passa.",
-      "Ogni seme ricostruisce l'ordigno: archetipo, guardie, gemelli di colore, codice. La scena è sempre risolvibile se si misurano i tratti uno per uno.",
+      "Si risolve seguendo i morsetti, non il colore. L'INNESCO di scena è il tubo rosso etichettato come tale. La linea dell'INIBITORE va dal morsetto INIBITORE a BAT −: finché resta chiusa, il copione non si ferma. Una TRAPPOLA è ogni tratto che sta su un percorso da BAT + all'INNESCO, anche se si spezza su un giunto. Un'ESCA è tutto il resto: ritorni morti, rami ciechi, percorsi che sembrano veri ma non conducono.",
+      "Ogni seme ricabla l'ordigno da capo: quanti giunti, quali rami, dove passa la linea. Nessun morsetto dice da solo qual è il filo giusto. La scheda mostra i capi di un filo solo dopo che li hai misurati.",
+      "Si vince quando fra INIBITORE e BAT − non resta nessuna strada. Se la linea ha due rami in parallelo, servono due tagli. La scena è sempre risolvibile misurando i tratti uno per uno.",
       "L'orbita, lo zoom e il pan muovono la camera. Il maneggio muove l'oggetto. Solo il secondo può far rotolare il grano d'inclinazione.",
     ],
   },
@@ -27,8 +28,8 @@ export const ARTICLES: Article[] = [
     body: [
       "Cella di palco: il polo positivo alimenta il timer e, nelle scene lunghe, parte verso un giunto. Dal giunto un tratto continua all'innesco e un altro, spesso dello stesso colore, muore su un morsetto del bus. Tagliare l'alimentazione spegne il display LCD. Il tempo, da copione, continua al buio.",
       "Condensatore di scena: finché è carico, COND + è vincolato a BAT +. Il CARICO FITTIZIO assorbe la scarica in un clic da studio. Se tagli l'alimentazione mentre quel vincolo è ancora chiuso, la scarica di copione finisce sull'innesco.",
-      "Relè del codice: sta in parallelo alla linea dell'inibitore. Finché il codice non è accettato, tagliare quel filo non apre nulla. A relè aperto, quel tratto è l'unica continuità rimasta.",
-      "Codice: quattro cifre. Prima sotto UV, sul guscio. Seconda, i lampeggi del cluster. Terza, il battito dell'antenna oppure la riga CIAK sul piatto, se l'antenna non c'è. Quarta = numero di fili meno numero di trappole (i segmenti sul percorso cella → innesco, rami ciechi esclusi).",
+      "Relè del codice: sta in parallelo alla linea dell'inibitore, fra INIBITORE e BAT −. Finché il codice non è accettato, nessun taglio apre nulla. A relè aperto, la continuità passa solo dai fili.",
+      "Codice: quattro cifre. Prima sotto UV, sul guscio. Seconda, i lampeggi del cluster. Terza, il battito dell'antenna oppure la riga CIAK sul piatto, se l'antenna non c'è. Quarta = numero di fili meno numero di trappole, ultima cifra del risultato. Le trappole sono i segmenti che portano davvero corrente da cella a innesco: perle girate e anime interrotte le tolgono dal conto.",
       "Il piatto inciso mente negli imperativi («taglia il rosso»). Dice la verità nella formula e, se presente, nella riga CIAK.",
     ],
   },
@@ -47,9 +48,10 @@ export const ARTICLES: Article[] = [
     title: "Fili e gemelli",
     kicker: "Modulo",
     body: [
-      "Cinque ruoli, mai scritti sul isolamento: sicura (inibitore), trappola (segmento fra cella e innesco), esca (ritorno morto o ramo cieco), alimentazione (cella verso timer), senso (antenna verso cluster).",
-      "Dalla caratterista in su c'è un giunto. Due fili possono uscirne vestiti uguale: uno continua il percorso, l'altro è un ramo cieco. Il protagonista ne ha due. Una perla gialla sul filo conduce in un verso solo: il giro inverso, se esiste, passa da un'altra strada.",
-      "La sicura non si lascia aprire finché il relè del codice è chiuso in parallelo, il condensatore è ancora sulla cella, o la copertura è giù. Il primo taglio forzato non interrompe la linea e costa secondi. Il secondo chiude la scena.",
+      "Cinque ruoli, mai scritti sull'isolante: sicura (un tratto della linea INIBITORE → BAT −), trappola (segmento fra cella e innesco), esca (tutto ciò che non porta corrente utile), alimentazione (cella verso timer), senso (antenna verso cluster).",
+      "I percorsi passano dai giunti. Due fili possono uscirne vestiti uguale: uno continua, l'altro è un ramo cieco. Una perla gialla sul filo conduce in un verso solo: se guarda dalla parte sbagliata, quel percorso è finto e i suoi tratti sono esche.",
+      "Dalla caratterista in su un filo può avere l'anima interrotta sotto l'isolante. A vista è intero; il multimetro, sui suoi due capi, legge aperto. Un percorso che passa da lì non esiste: conta come esca, anche quando sembra una trappola o un secondo ramo della linea.",
+      "La linea non si lascia aprire finché il relè del codice è chiuso in parallelo, il condensatore è ancora sulla cella, o la copertura è giù. Il primo taglio forzato non interrompe la linea e costa secondi. Il secondo chiude la scena.",
       "Le esche si possono tagliare: il percorso da BAT + all'INNESCO non le usa, ed è proprio il punto.",
     ],
   },
@@ -164,16 +166,16 @@ export const DIFFICULTY_COPY: Record<
   comparsa: {
     label: "Comparsa",
     time: "6:00",
-    text: "Quattro fili diretti. Il multimetro dice se il tratto sta fra cella e innesco.",
+    text: "Pochi fili, colori unici, niente perle. La linea dell'inibitore passa da un giunto: va trovata, non letta su un'etichetta.",
   },
   caratterista: {
     label: "Caratterista",
     time: "5:00",
-    text: "Un giunto, una perla di senso, un ramo cieco dello stesso colore, relè del codice.",
+    text: "Gemelli di colore, perle di senso, un percorso che forse è finto e fili con l'anima interrotta.",
   },
   protagonista: {
     label: "Protagonista",
     time: "3:30",
-    text: "Due giunti, due perle, due gemelli. Il percorso si legge, non si indovina.",
+    text: "Due strade verso l'innesco, due rami sulla linea. A volte basta un taglio, a volte ne servono due.",
   },
 };

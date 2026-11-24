@@ -207,7 +207,7 @@ function Header() {
           </div>
         )}
         <div className={`lcd-readout text-2xl md:text-4xl ${urgent ? "lcd-hot" : ""}`}>
-          {phase === "play" || phase === "safe" || phase === "boom" ? formatClock(seconds) : "––:––"}
+          {(phase === "play" && !dead) || phase === "safe" || phase === "boom" ? formatClock(seconds) : "––:––"}
         </div>
         <PingReadout />
         <div className="hidden text-xs text-muted sm:block">
@@ -415,10 +415,12 @@ function Dossier() {
   const selectedId = useGame((s) => s.selectedId);
   const dispatch = useGame((s) => s.dispatch);
   const toggleDossier = useGame((s) => s.toggleDossier);
+  const known = useGame((s) => s.knownWireIds);
   if (phase === "boot" || !bomb) return null;
 
   const wire = findWire(bomb, selectedId);
   const module = bomb.modules.find((m) => m.id === selectedId);
+  const wireKnown = !!wire && known.includes(wire.id);
 
   return (
     <aside
@@ -433,7 +435,9 @@ function Dossier() {
       <p className="font-display tracking-[0.14em] text-fg">{wire ? colorName(wire.color) : module ? module.name : "Banco di scena"}</p>
       <p className="mt-1 text-sm text-muted">
         {wire
-          ? `${terminalLabel(wire.a)} → ${terminalLabel(wire.b)}`
+          ? wireKnown
+            ? `${terminalLabel(wire.a)} → ${terminalLabel(wire.b)}`
+            : "Capi non ancora letti. Seguilo sul banco e sonda i due morsetti."
           : module
             ? MODULE_BLURB[module.kind]
             : `${ARCHETYPES[bomb.archetype].blurb} Trascina per orbitare, pizzica o usa la rotella per lo zoom.`}
@@ -554,14 +558,12 @@ function WireFacts({ id }: { id: string }) {
   const cut = useGame((s) => s.cutIds.includes(id));
   const marked = useGame((s) => s.markedIds.includes(id));
   const bomb = useGame((s) => s.bomb);
-  const view = useGame(
-    (s): NetView => ({
-      cutIds: s.cutIds,
-      jumpers: s.jumpers,
-      codeUnlocked: s.codeUnlocked,
-      capDumped: s.capDumped,
-    }),
-  );
+  // Selected one by one: a selector that builds a fresh object makes zustand re-render forever.
+  const cutIds = useGame((s) => s.cutIds);
+  const jumpers = useGame((s) => s.jumpers);
+  const codeUnlocked = useGame((s) => s.codeUnlocked);
+  const capDumped = useGame((s) => s.capDumped);
+  const view: NetView = { cutIds, jumpers, codeUnlocked, capDumped };
   const wire = bomb?.wires.find((w) => w.id === id);
   if (!wire || !bomb) return null;
   return (
@@ -905,9 +907,9 @@ function Sequence() {
       <ul className="mt-2 space-y-1 text-sm text-muted">
         {bomb.wires.map((wire) => (
           <li key={wire.id}>
-            {colorName(wire.color)}: {terminalLabel(wire.a)} → {terminalLabel(wire.b)}
+            {colorName(wire.color)}:{" "}
+            {known.includes(wire.id) ? `${terminalLabel(wire.a)} → ${terminalLabel(wire.b)}` : "non misurato"}
             {wire.diode ? " · perla" : ""}
-            {known.includes(wire.id) ? " · misurato" : ""}
             {marked.includes(wire.id) ? " · nastro" : ""}
           </li>
         ))}
