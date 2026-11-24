@@ -6,6 +6,7 @@ import { colorHex } from "../palette";
 import { useGame } from "../store";
 import type { Bomb, Module, Vec3, Wire } from "../types";
 import { createLcd, drawLcd } from "./lcd";
+import { CASE, ValigettaModel } from "./Valigetta";
 
 const texCache = new Map<string, THREE.CanvasTexture>();
 
@@ -38,6 +39,10 @@ function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | nul
   }
   const chassis = bomb.chassisTerminals.find((t) => t.id === id);
   if (!chassis) return null;
+  if (bomb.archetype === "valigetta") {
+    const post = id === "sw-a" ? SW_POST.a : SW_POST.b;
+    return new THREE.Vector3(post[0], post[1], post[2] + 0.04);
+  }
   return new THREE.Vector3(chassis.local[0], chassis.local[1], chassis.local[2]);
 }
 
@@ -56,8 +61,13 @@ export function Device() {
   );
 }
 
+/** Height of the bench group over the room origin. The table top sits at −0.255. */
+const TABLE_Y = -0.255;
+const BENCH_Y = { valigetta: TABLE_Y - CASE.bottomY, cilindro: -0.08, console: -0.08 } as const;
+
 function Attitude({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
+  const archetype = useGame((s) => s.bomb?.archetype ?? "valigetta");
   useFrame((_, delta) => {
     const d = Math.min(delta, 0.1);
     const a = useGame.getState().attitude;
@@ -66,7 +76,7 @@ function Attitude({ children }: { children: React.ReactNode }) {
     ref.current.rotation.z += (a.z - ref.current.rotation.z) * Math.min(1, d * 8);
   });
   return (
-    <group ref={ref} position={[0, -0.08, 0]}>
+    <group ref={ref} position={[0, BENCH_Y[archetype], 0]}>
       {children}
     </group>
   );
@@ -77,7 +87,26 @@ function Chassis() {
   const open = useGame((s) => s.lidOpen);
   const xray = useGame((s) => s.xray);
   const dispatch = useGame((s) => s.dispatch);
-  const shell = archetype === "valigetta" ? "#4a1e22" : archetype === "cilindro" ? "#3c4248" : "#3d4634";
+  if (archetype === "valigetta") {
+    const latch = (e: { stopPropagation: () => void }) => {
+      e.stopPropagation();
+      dispatch({ type: "pointer-latch" });
+    };
+    return (
+      <group>
+        <ValigettaModel open={open} xray={xray} />
+        {[-1, 1].map((side) => (
+          <mesh key={side} position={[side * CASE.latchX, CASE.wallMidY + 0.06, CASE.frontZ + 0.03]} onClick={latch}>
+            <boxGeometry args={[0.22, 0.3, 0.12]} />
+            <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
+          </mesh>
+        ))}
+        <Post id="sw-a" position={SW_POST.a} rotation={[Math.PI / 2, 0, 0]} />
+        <Post id="sw-b" position={SW_POST.b} rotation={[Math.PI / 2, 0, 0]} />
+      </group>
+    );
+  }
+  const shell = archetype === "cilindro" ? "#3c4248" : "#3d4634";
   const opacity = xray ? 0.16 : 1;
   return (
     <group>
@@ -86,7 +115,7 @@ function Chassis() {
         <meshStandardMaterial
           color={shell}
           roughness={0.62}
-          metalness={archetype === "valigetta" ? 0.18 : 0.55}
+          metalness={0.55}
           transparent={xray}
           opacity={opacity}
           depthWrite={!xray}
@@ -106,12 +135,6 @@ function Chassis() {
         <mesh position={[0, -0.02, 0.72]} rotation={[-0.55, 0, 0]} castShadow>
           <boxGeometry args={[2.05, 0.08, 0.42]} />
           <meshStandardMaterial color="#2a3124" metalness={0.4} roughness={0.5} />
-        </mesh>
-      )}
-      {archetype === "valigetta" && (
-        <mesh position={[0, 0.18, -0.86]} castShadow>
-          <torusGeometry args={[0.16, 0.028, 8, 16, Math.PI]} />
-          <meshStandardMaterial color="#c8c0b2" metalness={0.8} roughness={0.3} />
         </mesh>
       )}
       <Cover open={open}>
@@ -173,6 +196,12 @@ function Chassis() {
   );
 }
 
+/** Microswitch posts on the case: outside, on the front wall, between plate and catches. */
+const SW_POST = {
+  a: [-0.545, CASE.wallMidY, CASE.frontZ + 0.04] as Vec3,
+  b: [0.545, CASE.wallMidY, CASE.frontZ + 0.04] as Vec3,
+};
+
 function Cover({ open, children }: { open: boolean; children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   const anim = useRef(0);
@@ -194,10 +223,15 @@ function ModuleMesh({ mod }: { mod: Module }) {
   const dispatch = useGame((s) => s.dispatch);
   const pos = mod.position;
   const extra = exploded ? mod.explode : [0, 0, 0];
-  const at: [number, number, number] = [pos[0] + extra[0], pos[1] + extra[1], pos[2] + extra[2]];
+  const onCase = useGame((s) => s.bomb?.archetype === "valigetta") && mod.kind === "plate";
+  // On the case the plate is riveted upright to the front wall instead of lying on the bench.
+  const home: Vec3 = onCase ? [0, CASE.wallMidY, CASE.frontZ - 0.018] : pos;
+  const at: [number, number, number] = [home[0] + extra[0], home[1] + extra[1], home[2] + extra[2]];
   return (
     <group
       position={at}
+      rotation={onCase ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
+      scale={onCase ? 0.92 : 1}
       onClick={(e) => {
         e.stopPropagation();
         dispatch({ type: "pointer-part", id: mod.id });
@@ -243,12 +277,13 @@ function Mat({
   );
 }
 
-function Post({ id, position }: { id: string; position: Vec3 }) {
+function Post({ id, position, rotation }: { id: string; position: Vec3; rotation?: Vec3 }) {
   const dispatch = useGame((s) => s.dispatch);
   const pending = useGame((s) => s.probeA === id || s.pendingJumper === id);
   return (
     <mesh
       position={position}
+      rotation={rotation}
       castShadow
       onClick={(e) => {
         e.stopPropagation();
@@ -710,9 +745,10 @@ function UvMark() {
       }),
     [digit],
   );
+  const onCase = useGame((s) => s.bomb?.archetype === "valigetta");
   if (!uv || phase === "boot") return null;
   return (
-    <mesh position={[1.08, 0.05, -0.2]} rotation={[0, Math.PI / 2, 0]}>
+    <mesh position={onCase ? [CASE.sideX + 0.012, CASE.wallMidY, -0.2] : [1.08, 0.05, -0.2]} rotation={[0, Math.PI / 2, 0]}>
       <planeGeometry args={[0.28, 0.16]} />
       <meshBasicMaterial map={map} transparent toneMapped={false} />
     </mesh>
@@ -867,29 +903,9 @@ function Jumper({ bomb, a, b, exploded }: { bomb: Bomb; a: string; b: string; ex
 }
 
 function Hero() {
-  const { canvas, tex } = useMemo(() => createLcd(), []);
-  useEffect(() => {
-    drawLcd(canvas, "8888", "idle");
-    tex.needsUpdate = true;
-  }, [canvas, tex]);
   return (
-    <group position={[0, -0.05, 0]}>
-      <mesh position={[0, -0.02, 0]} castShadow>
-        <boxGeometry args={[1.7, 0.42, 1.15]} />
-        <meshStandardMaterial color="#4a1e22" roughness={0.7} metalness={0.15} />
-      </mesh>
-      <mesh position={[0, 0.2, 0]} castShadow>
-        <boxGeometry args={[1.62, 0.08, 1.05]} />
-        <meshStandardMaterial color="#161412" metalness={0.35} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.26, 0.05]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[0.48, 0.18]} />
-        <meshBasicMaterial map={tex} toneMapped={false} />
-      </mesh>
-      <mesh position={[0, 0.32, -0.48]}>
-        <torusGeometry args={[0.14, 0.02, 8, 14, Math.PI]} />
-        <meshStandardMaterial color="#ddd4c6" metalness={0.8} roughness={0.3} />
-      </mesh>
+    <group position={[0, BENCH_Y.valigetta, 0]}>
+      <ValigettaModel open={false} xray={false} />
     </group>
   );
 }

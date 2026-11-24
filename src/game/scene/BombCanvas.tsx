@@ -1,7 +1,7 @@
-import { OrbitControls } from "@react-three/drei";
+import { Environment, Lightformer, OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
 import { Device } from "./Device";
@@ -44,9 +44,18 @@ export function BombCanvas() {
       />
       <pointLight position={[0.15, 0.55, 0.1]} color={"#e23b2b"} intensity={2.2} distance={4.2} />
       <pointLight position={[-1.2, 0.8, -1.1]} color={"#ffb020"} intensity={0.6} distance={5} />
+      {/* Built in code, no download: gives chrome and glass something to reflect. */}
+      <Environment resolution={256} environmentIntensity={0.55}>
+        <color attach="background" args={["#0b0a09"]} />
+        <Lightformer form="rect" intensity={3} color="#ffd9b0" position={[-3, 4, 2]} scale={[5, 3, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={1.2} color="#9fb4c8" position={[4, 2, -3]} scale={[4, 4, 1]} target={[0, 0, 0]} />
+        <Lightformer form="ring" intensity={2} color="#ff5a3c" position={[0, 3, -4]} scale={2} target={[0, 0, 0]} />
+      </Environment>
       <Room />
       <Shake>
-        <Device />
+        <Suspense fallback={null}>
+          <Device />
+        </Suspense>
       </Shake>
       <Controls />
       <Clock />
