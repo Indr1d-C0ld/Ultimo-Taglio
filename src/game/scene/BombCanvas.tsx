@@ -1,7 +1,7 @@
 import { Environment, Lightformer, OrbitControls } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
 import { Device, inspectPoint } from "./Device";
@@ -37,7 +37,8 @@ export function BombCanvas() {
 /** Stage lighting. With the UV lamp on, the set goes dark and violet so the hidden mark can glow. */
 function Lights() {
   const uv = useGame((s) => s.uv && s.phase !== "boot");
-  const dim = uv ? 0.14 : 1;
+  const blackout = useGame((s) => s.phase === "play" && s.mods.includes("luci-basse"));
+  const dim = uv ? 0.14 : blackout ? 0.05 : 1;
   return (
     <>
       <hemisphereLight args={[uv ? "#7a52d6" : "#f0d2b4", "#1a120e", uv ? 0.5 : 0.55]} />
@@ -59,12 +60,31 @@ function Lights() {
       <pointLight position={[-1.2, 0.8, -1.1]} color={"#ffb020"} intensity={0.6 * dim} distance={5} />
       {uv && <pointLight position={[0.4, 1.6, 1.2]} color={"#8a5cff"} intensity={9} distance={7} />}
       {/* Built in code, no download: gives chrome and glass something to reflect. */}
-      <Environment resolution={256} environmentIntensity={uv ? 0.1 : 0.55}>
+      {blackout && <Torch />}
+      <Environment resolution={256} environmentIntensity={uv ? 0.1 : blackout ? 0.06 : 0.55}>
         <color attach="background" args={["#0b0a09"]} />
         <Lightformer form="rect" intensity={3} color="#ffd9b0" position={[-3, 4, 2]} scale={[5, 3, 1]} target={[0, 0, 0]} />
         <Lightformer form="rect" intensity={1.2} color="#9fb4c8" position={[4, 2, -3]} scale={[4, 4, 1]} target={[0, 0, 0]} />
         <Lightformer form="ring" intensity={2} color="#ff5a3c" position={[0, 3, -4]} scale={2} target={[0, 0, 0]} />
       </Environment>
+    </>
+  );
+}
+
+/** Blackout: a hand torch that sits at the camera and lights whatever it looks at. */
+function Torch() {
+  const light = useRef<THREE.SpotLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+  useFrame(({ camera }) => {
+    if (!light.current) return;
+    light.current.position.copy(camera.position);
+    camera.getWorldDirection(target.position).multiplyScalar(3).add(camera.position);
+    target.updateMatrixWorld();
+  });
+  return (
+    <>
+      <primitive object={target} />
+      <spotLight ref={light} target={target} angle={0.3} penumbra={0.55} intensity={38} distance={9} color="#fff1d6" />
     </>
   );
 }

@@ -149,7 +149,23 @@ export interface RunState {
   /** Short machine tag for how the scene ended; the sentence is in endReason. */
   endCause: EndCause | null;
   tally: Tally;
+  /** Scene rules in force, set by the campaign. Free scenes have none. */
+  mods: Modifier[];
+  /** Id of the campaign scene being shot, or null for a free scene. */
+  campaign: string | null;
 }
+
+/** A rule a campaign scene adds on top of the ordinary ones. */
+export type Modifier =
+  | "suggeritore-gratis"
+  | "suggeritore-muto"
+  | "copione-strappato"
+  | "luci-basse"
+  | "tronchese-spuntata"
+  | "radio-disturbata"
+  | "display-rotto"
+  | "tempo-stretto"
+  | "senza-rete";
 
 export type EndCause =
   | "disinnesco"
@@ -163,6 +179,7 @@ export type EndCause =
   | "condensatore"
   | "antenna"
   | "contatore"
+  | "regista"
   | "altro";
 
 /** Counters kept during a scene, for the end card and the career register. */
@@ -178,7 +195,8 @@ export interface Tally {
 }
 
 export type Action =
-  | { type: "start"; seed: string; difficulty: Difficulty; mode: Mode }
+  | { type: "start"; seed: string; difficulty: Difficulty; mode: Mode; mods?: Modifier[]; campaign?: string }
+  | { type: "archive-denied" }
   | { type: "abort" }
   | { type: "tool"; tool: Tool }
   | { type: "select"; id: string | null }

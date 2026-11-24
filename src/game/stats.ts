@@ -16,6 +16,9 @@ export interface RunRecord {
   reason: string;
   /** Date (YYYY-MM-DD) when this was that day's shared scene, otherwise null. */
   daily: string | null;
+  /** Campaign scene id and the rules it ran under. Absent on records from before the campaign. */
+  campaign?: string | null;
+  mods?: string[];
   score: number;
   grade: Grade;
   budget: number;
@@ -60,6 +63,7 @@ export const CAUSE_LABEL: Record<EndCause, string> = {
   condensatore: "Scarica del condensatore",
   antenna: "Ping dell'antenna",
   contatore: "Contatore B",
+  regista: "Stop del regista",
   altro: "Altro",
 };
 
@@ -128,7 +132,9 @@ export function recordOf(s: RunState, at: number, outcome: Outcome): RunRecord |
     outcome,
     cause: outcome === "abort" ? ("altro" as const) : (s.endCause ?? "altro"),
     reason: outcome === "abort" ? "Scena abbandonata." : s.endReason,
-    daily: bomb.seed === dailySeed(date) && bomb.difficulty === "caratterista" ? dayKey(date) : null,
+    daily: !s.campaign && bomb.seed === dailySeed(date) && bomb.difficulty === "caratterista" ? dayKey(date) : null,
+    campaign: s.campaign,
+    mods: s.mods,
     budget: bomb.seconds,
     left: outcome === "safe" ? s.secondsLeft : 0,
     elapsed,

@@ -32,6 +32,9 @@ interface UiState {
   /** Module the camera is parked on for a close look. */
   inspectId: string | null;
   setInspect: (id: string | null) => void;
+  /** The campaign screen. */
+  film: boolean;
+  toggleFilm: () => void;
   /** The player's own jottings for the four code digits. The game never fills or checks them. */
   codePad: string[];
   setPad: (index: number, value: string) => void;
@@ -116,6 +119,8 @@ function toRun(s: GameStore): RunState {
     bridgeWarned: s.bridgeWarned,
     endCause: s.endCause,
     tally: s.tally,
+    mods: s.mods,
+    campaign: s.campaign,
   };
 }
 
@@ -149,7 +154,7 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
     else set({ ...next, ...filed });
   },
@@ -162,6 +167,8 @@ export const useGame = create<GameStore>((set, get) => ({
   },
   inspectId: null,
   setInspect: (inspectId) => set(inspectId ? { inspectId, selectedId: inspectId } : { inspectId: null }),
+  film: false,
+  toggleFilm: () => set({ film: !get().film }),
   codePad: ["", "", "", ""],
   setPad: (index, value) => {
     const codePad = [...get().codePad];
@@ -180,7 +187,11 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ save });
     return error ?? null;
   },
-  toggleArchive: () => set({ archive: !get().archive }),
+  toggleArchive: () => {
+    const st = get();
+    if (!st.archive && st.phase === "play" && st.mods.includes("copione-strappato")) st.dispatch({ type: "archive-denied" });
+    else set({ archive: !st.archive });
+  },
   toggleSound: () => {
     const sound = !get().sound;
     setMuted(!sound);

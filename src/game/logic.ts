@@ -2,9 +2,9 @@ import { lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
 import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
 import { generateBomb, UV_SPOTS } from "./generate";
 import { fitLine } from "./kit";
-import { TUNING } from "./tuning";
+import { BLUNT_CUT_COST, tuningFor } from "./tuning";
 import { colorName, terminalLabel } from "./palette";
-import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, RunState, Wire } from "./types";
+import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, Modifier, RunState, Wire } from "./types";
 
 const TILT_LIMIT = 0.32;
 const MAX_TICK = 0.5;
@@ -58,6 +58,8 @@ export function initialState(): RunState {
     bridgeHot: false,
     bridgeCause: null,
     bridgeWarned: false,
+    mods: [],
+    campaign: null,
     endCause: null,
     tally: { elapsed: 0, probes: 0, wrongCodes: 0, decoyCuts: 0, lineCuts: 0, stageAt: {} },
   };
@@ -89,6 +91,8 @@ const CAUSES: [RegExp, EndCause][] = [
   [/condensatore carico/i, "condensatore"],
   [/contatore secondario/i, "contatore"],
   [/taglio sul senso/i, "tempo"],
+  [/taglio a vuoto/i, "tempo"],
+  [/buona la prima/i, "regista"],
 ];
 
 /** Files an ending sentence under a cause. Every sentence passed to boom() must match one. */
@@ -192,7 +196,13 @@ function live(s: RunState): boolean {
 }
 
 export function reduce(state: RunState, action: Action): RunState {
-  return stamp(step(state, action));
+  return stamp(oneTake(step(state, action)));
+}
+
+/** «Senza rete»: the director wants it right the first time, so the first slip ends the scene. */
+function oneTake(s: RunState): RunState {
+  if (s.phase !== "play" || !s.mods.includes("senza-rete") || s.mistakes === 0) return s;
+  return boom(s, "Un errore, e il regista voleva buona la prima. Stop.");
 }
 
 function step(state: RunState, action: Action): RunState {
@@ -200,7 +210,9 @@ function step(state: RunState, action: Action): RunState {
     case "abort":
       return { ...initialState(), difficulty: state.difficulty, mode: state.mode, seed: state.seed };
     case "start":
-      return start(action.seed, action.difficulty, action.mode);
+      return start(action.seed, action.difficulty, action.mode, action.mods ?? [], action.campaign ?? null);
+    case "archive-denied":
+      return state.phase === "play" ? say(state, "Il copione è strappato: l'archivio resta chiuso fino a fine scena.", "warn") : state;
     case "tool":
       return { ...state, tool: action.tool, probeA: null, pendingJumper: null };
     case "select":
@@ -236,11 +248,13 @@ function step(state: RunState, action: Action): RunState {
   }
 }
 
-function start(seed: string, difficulty: Difficulty, mode: Mode): RunState {
+function start(seed: string, difficulty: Difficulty, mode: Mode, mods: Modifier[], campaign: string | null): RunState {
   const clean = seed.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "CIAK01";
-  const bomb = generateBomb(clean, difficulty);
+  const made = generateBomb(clean, difficulty);
+  const bomb = { ...made, seconds: tuningFor(difficulty, mods).seconds };
   let s = say(initialState(), `${bomb.title}. Seme ${clean}. Il tempo ${mode === "prova" ? "è in prova generale." : "è in ripresa."}`, "info");
   s = say(s, "I colori non hanno un significato fisso. Il multimetro legge il percorso: cella, giunti, perle, relè. Non il costume del filo.", "info");
+  const broken = mods.includes("display-rotto");
   return {
     ...s,
     phase: "play",
@@ -249,6 +263,11 @@ function start(seed: string, difficulty: Difficulty, mode: Mode): RunState {
     seed: clean,
     bomb,
     secondsLeft: bomb.seconds,
+    mods,
+    campaign,
+    // A dead display with no service cell: the count runs where nobody can read it.
+    displayDead: broken,
+    cellSpare: !broken,
   };
 }
 
@@ -337,7 +356,7 @@ function tick(s: RunState, dt: number): RunState {
   const sensoCut = !!senso && n.cutIds.includes(senso.id);
   const pinging = bomb.gates.receiver && !n.codeUnlocked && !sensoCut;
   if (pinging) {
-    const { pingEvery, pingCost } = TUNING[bomb.difficulty];
+    const { pingEvery, pingCost } = tuningFor(bomb.difficulty, n.mods);
     const due = Math.floor((bomb.seconds - left) / pingEvery);
     if (due > n.pingCount) {
       const hits = due - n.pingCount;
@@ -502,6 +521,11 @@ function onWire(s: RunState, id: string): RunState {
   }
   if (wire.role === "esca") {
     n = bump({ ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) }, "decoyCuts");
+    if (n.mods.includes("tronchese-spuntata") && n.mode === "ripresa") {
+      n = { ...n, secondsLeft: Math.max(0, n.secondsLeft - BLUNT_CUT_COST) };
+      if (n.secondsLeft <= 0) return boom(n, "Un taglio a vuoto con la tronchese spuntata ha bruciato gli ultimi secondi.");
+      return say(n, `${colorName(wire.color)} tagliato a fatica: la tronchese spuntata si mangia ${BLUNT_CUT_COST} secondi. ${wireSeat(bomb, viewOf(n), id)}`, "warn");
+    }
     return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
   }
   if (wire.role === "senso") {
@@ -681,11 +705,12 @@ function finishListen(s: RunState): RunState {
 
 function onHint(s: RunState): RunState {
   if (!live(s) || !s.bomb) return s;
+  if (s.mods.includes("suggeritore-muto")) return say(s, "In questa scena il suggeritore non c'è. Te la cavi da solo.", "warn");
   if (s.hintsUsed >= 4) return say(s, "Il suggeritore ha finito le battute.", "warn");
   const { text, gives } = hintFor(s);
   let n: RunState = { ...s, hintsUsed: s.hintsUsed + 1 };
   if (gives) n = { ...n, decoded: { ...n.decoded, [gives]: true } };
-  if (n.mode === "ripresa") {
+  if (n.mode === "ripresa" && !n.mods.includes("suggeritore-gratis")) {
     n = { ...n, secondsLeft: Math.max(1, n.secondsLeft - 18) };
   }
   n = note(n, `Suggerimento: ${text}`);

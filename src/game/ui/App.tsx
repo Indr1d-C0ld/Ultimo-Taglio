@@ -34,6 +34,8 @@ import { randomSeed } from "../rng";
 import { activeProfile, markRead } from "../save";
 import { AWARDS, GRADES, dailySeed } from "../stats";
 import { Records } from "./Records";
+import { Film } from "./Film";
+import { MODIFIERS, nextScene, sceneById, stopLine, ciakOf, filmProgress } from "../campaign";
 import { emitView, useGame } from "../store";
 import { TUNING } from "../tuning";
 import type { Difficulty, Mode, ModuleKind, Tool } from "../types";
@@ -78,12 +80,13 @@ export function App() {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (event.key === "Escape") {
-        if (st.panel) st.closePanel();
+        if (st.film) st.toggleFilm();
+        else if (st.panel) st.closePanel();
         else if (st.inspectId && !st.archive) st.setInspect(null);
         else st.toggleArchive();
         return;
       }
-      if (st.archive || st.panel || st.phase !== "play") return;
+      if (st.archive || st.panel || st.film || st.phase !== "play") return;
       if (event.key === "e" || event.key === "E") st.dispatch({ type: "toggle", key: "exploded" });
       if (event.key === "x" || event.key === "X") st.dispatch({ type: "toggle", key: "xray" });
       if (event.key === "u" || event.key === "U") st.dispatch({ type: "toggle", key: "uv" });
@@ -126,6 +129,7 @@ export function App() {
             <TiltGauge />
             <BridgeMeter />
             <InspectBar />
+            <SceneRules />
             <HoverChip />
           </div>
           <Dossier />
@@ -136,6 +140,7 @@ export function App() {
       <BagSheet />
       {archive && <Archive />}
       <Records />
+      <Film />
       <div className="grain" aria-hidden />
     </div>
   );
@@ -408,6 +413,22 @@ function HoverChip() {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-3">
       <p className="rounded-sm border border-line bg-bg-raised/95 px-3 py-1 font-mono text-xs text-fg">{text}</p>
+    </div>
+  );
+}
+
+/** The rules this campaign scene adds, kept in sight while it is being shot. */
+function SceneRules() {
+  const mods = useGame((s) => s.mods);
+  const phase = useGame((s) => s.phase);
+  const title = useGame((s) => sceneById(s.campaign)?.title ?? "");
+  if (phase !== "play" || !title) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center px-48">
+      <div className="max-w-md rounded-sm border border-line bg-bg-raised/90 px-3 py-1 text-center">
+        <p className="font-display text-sm tracking-[0.14em] text-fg">{title}</p>
+        {mods.length > 0 && <p className="text-[11px] text-lcd">{mods.map((m) => MODIFIERS[m].label).join(" · ")}</p>}
+      </div>
     </div>
   );
 }
@@ -784,6 +805,8 @@ function Boot() {
   const [mode, setMode] = useState<Mode>("ripresa");
   const openPanel = useGame((s) => s.openPanel);
   const performer = useGame((s) => activeProfile(s.save).name);
+  const toggleFilm = useGame((s) => s.toggleFilm);
+  const filmDone = useGame((s) => filmProgress(activeProfile(s.save).runs).filter((p) => p.done).length);
   const daily = dailySeed(new Date());
 
   useEffect(() => {
@@ -805,7 +828,21 @@ function Boot() {
           Cambia interprete
         </button>
       </div>
-      <div className="mt-4 grid gap-2">
+      <button
+        type="button"
+        onClick={toggleFilm}
+        className="mt-3 flex w-full items-center justify-between gap-3 rounded-sm border border-accent bg-surface p-3 text-left"
+      >
+        <span>
+          <span className="block font-display text-lg tracking-[0.14em] text-fg">IL FILM</span>
+          <span className="block text-sm text-muted">Dodici scene in tre atti, ognuna con la sua regola.</span>
+        </span>
+        <span className="lcd-readout shrink-0 text-sm">
+          {filmDone} / 12
+        </span>
+      </button>
+      <p className="mt-4 text-[10px] tracking-[0.2em] text-muted">SCENA LIBERA</p>
+      <div className="mt-1 grid gap-2">
         {(Object.keys(DIFFICULTY_COPY) as Difficulty[]).map((id) => {
           const copy = DIFFICULTY_COPY[id]!;
           const on = difficulty === id;
@@ -894,11 +931,24 @@ function EndCard() {
   const run = useGame((s) => s.lastRun);
   const newAwards = useGame((s) => s.newAwards);
   const openPanel = useGame((s) => s.openPanel);
+  const mods = useGame((s) => s.mods);
+  const campaign = useGame((s) => s.campaign);
+  const cause = useGame((s) => s.endCause);
+  const toggleFilm = useGame((s) => s.toggleFilm);
   const ok = phase === "safe";
+  const scene = sceneById(campaign);
+  const next = scene && ok ? nextScene(scene.id) : undefined;
   return (
     <section className="pointer-events-auto w-full max-w-md rounded-md border border-line bg-bg-raised p-4">
       <p className="font-display text-3xl tracking-wide text-fg">{ok ? "DISINNESCATO" : "FINE RULLO"}</p>
       <p className="mt-2 text-sm text-muted">{reason}</p>
+      {scene && (
+        <blockquote className="mt-3 border-l-2 border-accent pl-3 text-sm text-fg">
+          <p className="text-[10px] tracking-[0.2em] text-muted">IL REGISTA</p>
+          <p>«{ok ? scene.wrap : stopLine(cause ?? "altro")}»</p>
+          {ok && run && <p className="mt-1 text-xs text-lcd">{ciakOf(run.grade)} ciak su 3</p>}
+        </blockquote>
+      )}
       {run && ok && (
         <div className="mt-3 flex items-end justify-between gap-3 border-y border-line py-2">
           <div>
@@ -933,17 +983,31 @@ function EndCard() {
         <button
           type="button"
           className="h-11 flex-1 rounded-sm bg-accent text-sm text-fg"
-          onClick={() => dispatch({ type: "start", seed, difficulty, mode })}
+          onClick={() => dispatch({ type: "start", seed, difficulty, mode, mods, campaign: campaign ?? undefined })}
         >
-          Stesso seme
+          {scene ? "Rigira la scena" : "Stesso seme"}
         </button>
-        <button
-          type="button"
-          className="h-11 flex-1 rounded-sm border border-line text-sm text-fg"
-          onClick={() => dispatch({ type: "start", seed: randomSeed(), difficulty, mode })}
-        >
-          Nuova scena
-        </button>
+        {scene ? (
+          <button
+            type="button"
+            className="h-11 flex-1 rounded-sm border border-line text-sm text-fg"
+            onClick={() =>
+              next
+                ? dispatch({ type: "start", seed: next.seed, difficulty: next.difficulty, mode: "ripresa", mods: next.mods, campaign: next.id })
+                : toggleFilm()
+            }
+          >
+            {next ? "Scena successiva" : "Torna al film"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="h-11 flex-1 rounded-sm border border-line text-sm text-fg"
+            onClick={() => dispatch({ type: "start", seed: randomSeed(), difficulty, mode })}
+          >
+            Nuova scena
+          </button>
+        )}
       </div>
       <div className="mt-2 flex gap-2">
         <button type="button" className="h-11 flex-1 text-sm text-lcd" onClick={() => openPanel("partita")}>
