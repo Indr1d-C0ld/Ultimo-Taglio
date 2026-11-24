@@ -40,7 +40,8 @@ export const ARTICLES: Article[] = [
     body: [
       "Il display a sette segmenti è il cliché che tiene la scena. In ripresa scende davvero. In prova generale resta fermo, per studiare.",
       "Sotto i dieci secondi il bip sale di tono. Se l'alimentazione viene tagliata a condensatore già scarico, il vetro si spegne ma il conteggio no: lo leggi ancora nel bordo dello schermo.",
-      "Un'antenna non zittita ruba secondi a intervalli. Il contatore B, se ignorato oltre metà tempo, ne brucia venticinque in un colpo.",
+      "Un'antenna non zittita ruba secondi a intervalli: più spesso e più a fondo man mano che la parte si fa importante. Il contatore B, se ignorato oltre metà tempo, ne brucia venticinque in un colpo.",
+      "Le durate sono tarate su chi fa tutto come da copione: ogni guardia, ogni cifra trovata di persona, ogni filo misurato. In comparsa c'è tempo per imparare. In caratterista ne avanza a chi ha la mano sicura. In protagonista non ne avanza quasi.",
     ],
   },
   {
@@ -162,21 +163,18 @@ export const ARTICLES: Article[] = [
 
 export const DIFFICULTY_COPY: Record<
   string,
-  { label: string; time: string; text: string }
+  { label: string; text: string }
 > = {
   comparsa: {
     label: "Comparsa",
-    time: "6:00",
     text: "Pochi fili, colori unici, niente perle. La linea dell'inibitore passa da un giunto: va trovata, non letta su un'etichetta.",
   },
   caratterista: {
     label: "Caratterista",
-    time: "5:00",
     text: "Gemelli di colore, perle di senso, un percorso che forse è finto e fili con l'anima interrotta.",
   },
   protagonista: {
     label: "Protagonista",
-    time: "3:30",
     text: "Due strade verso l'innesco, due rami sulla linea. A volte basta un taglio, a volte ne servono due.",
   },
 };

@@ -1,5 +1,6 @@
 import { edgeCarries, wireEdges } from "./circuit";
 import { terminalLabel, WIRE_COLORS, type WireColor } from "./palette";
+import { TUNING } from "./tuning";
 import { hashString, mulberry32, pick, shuffle, type Rng } from "./rng";
 import type {
   Archetype,
@@ -95,7 +96,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
     "IV = FILI − TRAPPOLE",
   ];
 
-  const seconds = difficulty === "comparsa" ? 360 : difficulty === "caratterista" ? 300 : 210;
+  const seconds = TUNING[difficulty].seconds;
   const scene = 8 + Math.floor(rng() * 80);
 
   const uvSpot = Math.floor(rng() * UV_SPOTS.length);

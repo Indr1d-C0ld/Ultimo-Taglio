@@ -2,6 +2,7 @@ import { lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
 import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
 import { generateBomb, UV_SPOTS } from "./generate";
 import { fitLine } from "./kit";
+import { TUNING } from "./tuning";
 import { colorName, terminalLabel } from "./palette";
 import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, RunState, Wire } from "./types";
 
@@ -336,10 +337,11 @@ function tick(s: RunState, dt: number): RunState {
   const sensoCut = !!senso && n.cutIds.includes(senso.id);
   const pinging = bomb.gates.receiver && !n.codeUnlocked && !sensoCut;
   if (pinging) {
-    const due = Math.floor((bomb.seconds - left) / 22);
+    const { pingEvery, pingCost } = TUNING[bomb.difficulty];
+    const due = Math.floor((bomb.seconds - left) / pingEvery);
     if (due > n.pingCount) {
       const hits = due - n.pingCount;
-      left -= hits * 7;
+      left -= hits * pingCost;
       n = say(
         { ...n, pingCount: due, secondsLeft: Math.max(0, left), bridge: n.bridgeHot ? n.bridge + hits * 0.12 : Math.min(0.48, n.bridge + hits * 0.08) },
         n.bridgeHot

@@ -35,6 +35,7 @@ import { activeProfile, markRead } from "../save";
 import { AWARDS, GRADES, dailySeed } from "../stats";
 import { Records } from "./Records";
 import { emitView, useGame } from "../store";
+import { TUNING } from "../tuning";
 import type { Difficulty, Mode, ModuleKind, Tool } from "../types";
 
 const ICONS: Record<Tool, ComponentType<{ className?: string }>> = {
@@ -243,8 +244,9 @@ function PingReadout() {
     const senso = s.bomb.wires.find((w) => w.role === "senso");
     if (senso && s.cutIds.includes(senso.id)) return "";
     const elapsed = s.bomb.seconds - s.secondsLeft;
-    const mod = elapsed % 22;
-    const until = mod === 0 ? 22 : 22 - mod;
+    const every = TUNING[s.bomb.difficulty].pingEvery;
+    const mod = elapsed % every;
+    const until = mod === 0 ? every : every - mod;
     return `ping ${Math.ceil(until)}s`;
   });
   if (!label) return null;
@@ -816,7 +818,7 @@ function Boot() {
             >
               <span className="flex items-baseline justify-between gap-3">
                 <span className="font-display tracking-wide text-fg">{copy.label}</span>
-                <span className="lcd-readout text-sm">{copy.time}</span>
+                <span className="lcd-readout text-sm">{formatClock(TUNING[id].seconds).replace(/^0/, "")}</span>
               </span>
               <span className="mt-1 block text-sm text-muted">{copy.text}</span>
             </button>
