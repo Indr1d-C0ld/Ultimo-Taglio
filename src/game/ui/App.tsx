@@ -58,10 +58,10 @@ const MODULE_BLURB: Record<ModuleKind, string> = {
   battery: "Cella di palco. Il positivo alimenta il timer e spesso una trappola.",
   detonator: "Tubo di repertorio con un ponte di scena. Sale solo se forzi una guardia. INIBITORE è il taglio, a relè aperto.",
   cap: "Scarica di copione. Solo il carico fittizio è un ponticello lecito.",
-  keypad: "Quattro cifre. UV, cluster, antenna o CIAK, poi fili meno trappole.",
+  keypad: "Quattro cifre, tutte da trovare di persona: UV, lampi del cluster, battiti dell'antenna o riga CIAK, poi fili meno trappole.",
   tilt: "Pallina in un tubo. Il maneggio la muove; la camera no. La brugola la blocca.",
-  receiver: "Batte la terza cifra e ruba secondi finché il codice non la zittisce.",
-  leds: "Il numero di lampeggi è la seconda cifra.",
+  receiver: "Batte la terza cifra, ma si sente solo con lo stetoscopio. Ruba secondi finché il codice non la zittisce.",
+  leds: "I lampi fra una pausa e l'altra sono la seconda cifra. Si contano a occhio: avvicinati.",
   dial: "Tre ruote opzionali. Evitano il salto di tempo a metà scena.",
   plate: "Gli ordini sul metallo mentono. Formula e riga CIAK no.",
 };
@@ -513,7 +513,7 @@ function Dossier() {
       )}
       {module?.kind === "keypad" && <KeypadPad />}
       {module?.kind === "dial" && <DialPad />}
-      {(module?.kind === "leds" || module?.kind === "receiver") && <ListenButton />}
+      {module?.kind === "receiver" && <ListenButton />}
       <Contacts />
       <div className="mt-3 flex flex-wrap gap-1">
         {bomb.modules.map((item) => (
@@ -527,6 +527,7 @@ function Dossier() {
           </button>
         ))}
       </div>
+      <CodePad />
       <Notes />
       <button type="button" onClick={() => dispatch({ type: "hint" })} className="mt-3 h-11 w-full rounded-sm border border-line text-sm text-lcd">
         Suggerimento di scena
@@ -710,14 +711,43 @@ function ListenButton() {
       }}
       className="mt-3 h-11 w-full rounded-sm bg-accent text-sm text-fg"
     >
-      {left > 0 ? "In ascolto…" : "Stetoscopio"}
+      {left > 0 ? "In ascolto: conta i battiti…" : "Stetoscopio sull'antenna"}
     </button>
+  );
+}
+
+const PAD_HINT = ["UV", "lampi", "battiti", "fili"];
+
+/** Four boxes to jot the digits as you find them. Yours to fill: nothing here is checked. */
+function CodePad() {
+  const pad = useGame((s) => s.codePad);
+  const setPad = useGame((s) => s.setPad);
+  const keypad = useGame((s) => !!s.bomb?.gates.keypad && !s.codeUnlocked);
+  if (!keypad) return null;
+  return (
+    <div className="mt-3 border border-line p-2">
+      <p className="text-[10px] tracking-[0.2em] text-lcd">TACCUINO DEL CODICE</p>
+      <div className="mt-1 grid grid-cols-4 gap-1">
+        {pad.map((value, i) => (
+          <label key={i} className="block text-center text-[10px] text-muted">
+            <input
+              value={value}
+              onChange={(e) => setPad(i, e.target.value)}
+              inputMode="numeric"
+              aria-label={`Cifra ${i + 1} (${PAD_HINT[i]})`}
+              className="lcd-readout h-11 w-full border border-line bg-bg text-center text-xl outline-none focus:border-accent"
+            />
+            {PAD_HINT[i]}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
 function Notes() {
   const notes = useGame((s) => s.notes);
-  if (!notes.length) return <p className="mt-3 text-xs text-faint">Gli appunti compaiono qui: UV, letture, decodifiche.</p>;
+  if (!notes.length) return <p className="mt-3 text-xs text-faint">Gli appunti compaiono qui: le letture del multimetro e i suggerimenti. Le cifre le annoti tu, nel taccuino.</p>;
   return (
     <ul className="mt-3 space-y-1 text-xs text-muted">
       {notes.map((n) => (

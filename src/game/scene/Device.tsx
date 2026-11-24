@@ -468,27 +468,51 @@ function DigitReadout({ text, y, z }: { text: string; y: number; z: number }) {
   );
 }
 
+/** Where the UV digit is painted, per shell: right wall, left wall, back wall, floor by the catches. */
+const UV_PLACES: Record<"case" | "box", { position: Vec3; rotation: Vec3 }[]> = {
+  case: [
+    { position: [CASE.sideX + 0.012, CASE.wallMidY, -0.2], rotation: [0, Math.PI / 2, 0] },
+    { position: [-CASE.sideX - 0.012, CASE.wallMidY, 0.2], rotation: [0, -Math.PI / 2, 0] },
+    { position: [0.62, CASE.wallMidY, CASE.backZ - 0.012], rotation: [0, Math.PI, 0] },
+    { position: [0.36, 0.034, 0.7], rotation: [-Math.PI / 2, 0, 0] },
+  ],
+  box: [
+    { position: [1.072, -0.08, -0.2], rotation: [0, Math.PI / 2, 0] },
+    { position: [-1.072, -0.08, 0.2], rotation: [0, -Math.PI / 2, 0] },
+    { position: [0.62, -0.08, -0.922], rotation: [0, Math.PI, 0] },
+    { position: [0.5, 0.04, 0.66], rotation: [-Math.PI / 2, 0, 0] },
+  ],
+};
+
+/** Invisible in stage light. Under the UV lamp it glows, on whichever face this scene put it. */
 function UvMark() {
   const uv = useGame((s) => s.uv);
   const digit = useGame((s) => s.bomb?.uvDigit ?? "");
+  const spot = useGame((s) => s.bomb?.uvSpot ?? 0);
   const phase = useGame((s) => s.phase);
   const map = useMemo(
     () =>
       paint(`uv-${digit}`, 256, 128, (ctx) => {
         ctx.clearRect(0, 0, 256, 128);
-        ctx.fillStyle = "#b388ff";
-        ctx.font = "600 84px sans-serif";
-        ctx.fillText(digit, 80, 96);
-        ctx.font = "20px sans-serif";
-        ctx.fillText("I", 24, 40);
+        ctx.fillStyle = "#c9a6ff";
+        ctx.textBaseline = "middle";
+        ctx.font = '600 92px "IBM Plex Mono", monospace';
+        ctx.fillText(digit, 96, 68);
+        ctx.font = '600 30px "IBM Plex Mono", monospace';
+        ctx.fillText("I", 28, 68);
+        ctx.strokeStyle = "#c9a6ff";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(10, 10, 236, 108);
       }),
     [digit],
   );
   const onCase = useGame((s) => s.bomb?.archetype === "valigetta");
   if (!uv || phase === "boot") return null;
+  const places = UV_PLACES[onCase ? "case" : "box"];
+  const place = places[spot % places.length]!;
   return (
-    <mesh position={onCase ? [CASE.sideX + 0.012, CASE.wallMidY, -0.2] : [1.08, 0.05, -0.2]} rotation={[0, Math.PI / 2, 0]}>
-      <planeGeometry args={[0.28, 0.16]} />
+    <mesh position={place.position} rotation={place.rotation}>
+      <planeGeometry args={[0.26, 0.13]} />
       <meshBasicMaterial map={map} transparent toneMapped={false} />
     </mesh>
   );

@@ -1,7 +1,8 @@
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { formatClock } from "../logic";
+import { beep } from "../audio";
+import { BEAT, beatCycle, formatClock } from "../logic";
 import { useGame } from "../store";
 import { createLcd, drawLcd } from "./lcd";
 import { paint } from "./paint";
@@ -219,11 +220,27 @@ export function ReceiverModule({ selected }: { selected: boolean }) {
   useSelectionGlow(prop, selected, LAMP);
   const lamp = useLamp(prop, /Indicator_Lens/, "#ffb020");
   const beats = useGame((s) => Number(s.bomb?.code[2] ?? 3));
-  useFrame(({ clock }) => {
-    const slot = 0.22;
-    const t = clock.elapsedTime % (slot * beats + 0.55);
-    const on = Math.floor(t / slot) < beats && t % slot < 0.1;
-    for (const m of lamp) m.emissiveIntensity = on ? 2.6 : 0.05;
+  const listening = useGame((s) => s.listenKind === "receiver" && s.listenLeft > 0);
+  const since = useRef(0);
+  const last = useRef(-1);
+  useEffect(() => {
+    since.current = performance.now() / 1000;
+    last.current = -1;
+  }, [listening]);
+  useFrame(() => {
+    // Silent and dark until the stethoscope is on it. Then: `beats` pulses, a pause, and again.
+    let on = false;
+    if (listening) {
+      const t = (performance.now() / 1000 - since.current - 0.5) % beatCycle(beats);
+      const index = Math.floor(t / BEAT);
+      on = t >= 0 && index < beats && t % BEAT < 0.14;
+      const stamp = Math.floor((performance.now() / 1000 - since.current - 0.5) / beatCycle(beats)) * 100 + index;
+      if (on && stamp !== last.current) {
+        last.current = stamp;
+        beep(330);
+      }
+    }
+    for (const m of lamp) m.emissiveIntensity = on ? 2.8 : 0.04;
   });
   return <primitive object={prop.object} />;
 }

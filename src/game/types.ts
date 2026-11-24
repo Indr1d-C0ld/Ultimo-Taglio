@@ -84,6 +84,8 @@ export interface Bomb {
   wires: Wire[];
   chassisTerminals: Terminal[];
   uvDigit: string;
+  /** Which face of the shell carries the UV digit; the scene picks the exact place. */
+  uvSpot: number;
   ledBlink: number;
   plateLines: string[];
 }
@@ -130,6 +132,7 @@ export interface RunState {
   attitude: { x: number; z: number };
   listenLeft: number;
   listenKind: "receiver" | "leds" | null;
+  /** Digits the prompter has given away. Nothing is decoded for the player any more. */
   decoded: { uv: boolean; blinks: boolean; morse: boolean };
   dialPenalty: boolean;
   pingCount: number;

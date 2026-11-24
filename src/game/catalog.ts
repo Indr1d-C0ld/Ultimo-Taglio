@@ -29,7 +29,7 @@ export const ARTICLES: Article[] = [
       "Cella di palco: il polo positivo alimenta il timer e, nelle scene lunghe, parte verso un giunto. Dal giunto un tratto continua all'innesco e un altro, spesso dello stesso colore, muore su un morsetto del bus. Tagliare l'alimentazione spegne il display LCD. Il tempo, da copione, continua al buio.",
       "Condensatore di scena: finché è carico, COND + è vincolato a BAT +. Il CARICO FITTIZIO assorbe la scarica in un clic da studio. Se tagli l'alimentazione mentre quel vincolo è ancora chiuso, la scarica di copione finisce sull'innesco.",
       "Relè del codice: sta in parallelo alla linea dell'inibitore, fra INIBITORE e BAT −. Finché il codice non è accettato, nessun taglio apre nulla. A relè aperto, la continuità passa solo dai fili.",
-      "Codice: quattro cifre. Prima sotto UV, sul guscio. Seconda, i lampeggi del cluster. Terza, il battito dell'antenna oppure la riga CIAK sul piatto, se l'antenna non c'è. Quarta = numero di fili meno numero di trappole, ultima cifra del risultato. Le trappole sono i segmenti che portano davvero corrente da cella a innesco: perle girate e anime interrotte le tolgono dal conto.",
+      "Codice: quattro cifre, e nessuna si scrive da sola. Prima sotto UV, da qualche parte sul guscio. Seconda, i lampi del cluster, contati a occhio. Terza, i battiti dell'antenna con lo stetoscopio, oppure la riga CIAK sul piatto se l'antenna non c'è. Quarta = numero di fili meno numero di trappole, ultima cifra del risultato. Le trappole sono i segmenti che portano davvero corrente da cella a innesco: perle girate e anime interrotte le tolgono dal conto.",
       "Il piatto inciso mente negli imperativi («taglia il rosso»). Dice la verità nella formula e, se presente, nella riga CIAK.",
     ],
   },
@@ -92,7 +92,8 @@ export const ARTICLES: Article[] = [
     kicker: "Guardia",
     body: [
       "Quattro cifre, poi OK. Giusto: lo sportello sulla sicura si ritrae e l'antenna, se c'era, smette di rubare tempo. Sbagliato: il codice si cancella e la ripresa perde dieci secondi.",
-      "Le cifre non stanno mai tutte nello stesso posto. UV, cluster, antenna o riga CIAK, formula dei fili. Il suggeritore, a pagamento di secondi, può arrivare a dirtele.",
+      "Le cifre non stanno mai tutte nello stesso posto e vanno lette di persona. La lampada UV spegne le luci di scena e fa brillare una cifra dipinta sul guscio: può stare su un fianco, dietro, o sul fondo. Va cercata girandoci intorno.",
+      "Il taccuino del codice, nella scheda, ha quattro caselle: le riempi tu man mano. Il suggeritore, a pagamento di secondi, regala una cifra per volta.",
       "Puoi comporre dal dossier anche se il vetro è ancora chiuso. Lo sportello fisico, però, libera il filo solo quando il banco è aperto e le altre guardie sono a posto.",
     ],
   },
@@ -111,8 +112,8 @@ export const ARTICLES: Article[] = [
     title: "Ricevitore di copione",
     kicker: "Modulo",
     body: [
-      "Un'antenna che batte una cifra, la terza del codice. Si decodifica dal dossier, col ricevitore selezionato: due secondi e mezzo di ascolto.",
-      "Finché il codice non è inserito, un ping ruba secondi. Tagliare il filo di senso zittisce anche il cluster: fallo solo dopo aver contato i lampeggi, se ti serve ancora la seconda cifra.",
+      "Un'antenna che batte una cifra, la terza del codice. A orecchio nudo tace: con lo stetoscopio sul ricevitore si sentono i battiti e la spia li segue. Tanti battiti, una pausa, e di nuovo: l'ascolto dura due giri.",
+      "Finché il codice non è inserito, un ping ruba secondi. Tagliare il filo di senso zittisce anche il cluster: fallo solo dopo aver contato i lampi, se ti serve ancora la seconda cifra.",
       "Se la scena non ha antenna, la terza cifra è la riga CIAK sul piatto. Le altre righe imperative sono bugie da locandina.",
     ],
   },
@@ -121,7 +122,7 @@ export const ARTICLES: Article[] = [
     title: "Cluster di lampeggi",
     kicker: "Modulo",
     body: [
-      "Una fila di spie che corre e si ferma. Il numero di lampi nel ciclo è la seconda cifra. Puoi contarli a vista o premere decodifica col cluster selezionato.",
+      "Una fila di spie che corre e si ferma. Il numero di lampi fra una pausa e l'altra è la seconda cifra. Si contano a vista: conviene ispezionare il cluster da vicino.",
       "Il filo di senso lo alimenta. Tagliato, le spie muoiono. Se non avevi ancora la cifra, ti resta solo un suggerimento.",
     ],
   },

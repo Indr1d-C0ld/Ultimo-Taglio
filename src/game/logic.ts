@@ -1,6 +1,6 @@
 import { lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
 import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
-import { generateBomb } from "./generate";
+import { generateBomb, UV_SPOTS } from "./generate";
 import { fitLine } from "./kit";
 import { colorName, terminalLabel } from "./palette";
 import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, RunState, Wire } from "./types";
@@ -254,12 +254,10 @@ function start(seed: string, difficulty: Difficulty, mode: Mode): RunState {
 function toggle(s: RunState, key: "uv" | "xray" | "exploded"): RunState {
   const next = !s[key];
   let n: RunState = { ...s, [key]: next };
-  if (key === "uv" && next && s.bomb && s.phase === "play" && !s.decoded.uv) {
-    n = { ...n, decoded: { ...n.decoded, uv: true } };
-    n = note(n, `UV — prima cifra: ${s.bomb.uvDigit}`);
-    n = say(n, `Sotto la lampada UV compare un numero: ${s.bomb.uvDigit}. È la prima cifra.`, "good");
-  } else if (key === "uv" && next) {
-    n = say(n, "Lampada UV accesa. Le scritte di scena invisibili escono dal metallo.", "info");
+  if (key === "uv" && next) {
+    n = say(n, "Lampada UV accesa. Da qualche parte sul guscio c'è una cifra che si vede solo così: giragli intorno.", "info");
+  } else if (key === "uv") {
+    n = say(n, "Lampada UV spenta.", "info");
   } else if (key === "xray") {
     n = say(n, next ? "Raggi di scena: il guscio diventa velo." : "Raggi spenti.", "info");
   } else if (key === "exploded") {
@@ -423,6 +421,7 @@ function onPart(s: RunState, id: string): RunState {
   if (n.tool === "pila" && (id === "battery" || id === "timer")) return useCell(n);
   if (n.tool === "brugola" && id === "tilt") return onTilt(n);
   if (n.tool === "stetoscopio" && (id === "leds" || id === "receiver")) return onListen(n);
+  if (id === "leds") return n.tool === "occhio" || n.tool === "maneggio" ? n : say(n, "Cluster: nessun attrezzo. I lampi si contano a occhio.", "info");
   if (n.tool === "cacciavite" && id === "tilt") {
     return say(n, "La vite del grano è una brugola. Il cacciavite delle chiusure non entra.", "warn");
   }
@@ -504,20 +503,13 @@ function onWire(s: RunState, id: string): RunState {
     return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
   }
   if (wire.role === "senso") {
-    const blind = !n.decoded.blinks;
     n = {
       ...n,
       cutIds: [...n.cutIds, id],
       ledsBlind: true,
       secondsLeft: n.mode === "ripresa" ? Math.max(0, n.secondsLeft - 12) : n.secondsLeft,
     };
-    n = say(
-      n,
-      blind
-        ? "Hai spento il cluster prima di contare i lampeggi. La seconda cifra adesso è solo negli appunti, se c'erano."
-        : "Onda di scena interrotta. Il cluster si spegne, il conteggio resta negli appunti.",
-      "warn",
-    );
+    n = say(n, "Onda di scena interrotta. Il cluster si spegne: se non avevi contato i lampi, la seconda cifra non si legge più.", "warn");
     if (n.secondsLeft <= 0) return boom(n, "Il taglio sul senso ha bruciato gli ultimi secondi.");
     return n;
   }
@@ -590,12 +582,6 @@ function onLatch(s: RunState): RunState {
     return boom(n, `Il microswitch sotto il ${bomb.cover} ha chiuso il contatto. Andava ponticellato prima.`);
   }
   n = { ...n, lidOpen: true };
-  n = note(n, `Piatto: ${bomb.plateLines.join(" · ")}`);
-  if (!bomb.gates.receiver) {
-    n = { ...n, decoded: { ...n.decoded, morse: true } };
-    const ciak = bomb.plateLines.find((l) => l.startsWith("CIAK"));
-    if (ciak) n = note(n, `Terza cifra dal piatto: ${ciak.replace("CIAK ", "")}`);
-  }
   return say(n, `${cap(bomb.cover)} aperto. I moduli di scena sono raggiungibili.`, "good");
 }
 
@@ -660,47 +646,43 @@ function onRotate(s: RunState, dx: number, dz: number): RunState {
   return n;
 }
 
+/** Seconds the stethoscope stays on the antenna: two full runs of the beat, so a missed count can be checked. */
+export function listenSpan(bomb: Bomb): number {
+  return 2 * beatCycle(Number(bomb.code[2] ?? 3)) + 0.3;
+}
+
+export const BEAT = 0.34;
+export function beatCycle(beats: number): number {
+  return beats * BEAT + 1.1;
+}
+
 function onListen(s: RunState): RunState {
   if (!live(s) || !s.bomb) return s;
+  if (s.selectedId === "leds") return say(s, "Il cluster non si ascolta: i lampi si contano a occhio, da vicino.", "info");
   if (s.tool !== "stetoscopio") return say(s, "Serve lo stetoscopio di scena. L'orecchio nudo non tiene il tempo del battito.", "warn");
   if (s.listenLeft > 0) return s;
-  if (s.selectedId === "leds") {
-    if (!s.lidOpen) return say(s, "Il cluster è dentro. Apri prima.", "warn");
-    if (s.ledsBlind && !s.decoded.blinks) return say(s, "Il cluster è muto: il filo dell'onda è già tagliato.", "warn");
-    return say({ ...s, listenLeft: 2.6, listenKind: "leds" }, "Conti i lampeggi del cluster…", "info");
-  }
   if (s.selectedId === "receiver") {
     if (!s.bomb.gates.receiver) return say(s, "Nessuna antenna in questa scena.", "warn");
-    return say({ ...s, listenLeft: 2.6, listenKind: "receiver" }, "Ascolti il battito dell'antenna…", "info");
+    return say(
+      { ...s, listenLeft: listenSpan(s.bomb), listenKind: "receiver" },
+      "Stetoscopio sull'antenna. Conta i battiti fra una pausa e l'altra: passano due volte.",
+      "info",
+    );
   }
-  return say(s, "Seleziona il cluster o il ricevitore, poi decodifica.", "info");
+  return say(s, "Lo stetoscopio va sul ricevitore.", "info");
 }
 
 function finishListen(s: RunState): RunState {
-  if (!s.bomb) return { ...s, listenLeft: 0, listenKind: null };
-  if (s.listenKind === "leds") {
-    const n = note(
-      { ...s, listenLeft: 0, listenKind: null, decoded: { ...s.decoded, blinks: true } },
-      `Cluster — seconda cifra: ${s.bomb.ledBlink}`,
-    );
-    return say(n, `Il cluster chiude il ciclo su ${s.bomb.ledBlink}. Seconda cifra.`, "good");
-  }
-  if (s.listenKind === "receiver") {
-    const digit = s.bomb.code[2] ?? "?";
-    const n = note(
-      { ...s, listenLeft: 0, listenKind: null, decoded: { ...s.decoded, morse: true } },
-      `Antenna — terza cifra: ${digit}`,
-    );
-    return say(n, `L'antenna batte un ${digit}. Terza cifra.`, "good");
-  }
-  return { ...s, listenLeft: 0, listenKind: null };
+  const n: RunState = { ...s, listenLeft: 0, listenKind: null };
+  return s.listenKind === "receiver" ? say(n, "Stetoscopio via. Se hai perso il conto, riascolta.", "info") : n;
 }
 
 function onHint(s: RunState): RunState {
   if (!live(s) || !s.bomb) return s;
   if (s.hintsUsed >= 4) return say(s, "Il suggeritore ha finito le battute.", "warn");
-  const text = hintText(s);
+  const { text, gives } = hintFor(s);
   let n: RunState = { ...s, hintsUsed: s.hintsUsed + 1 };
+  if (gives) n = { ...n, decoded: { ...n.decoded, [gives]: true } };
   if (n.mode === "ripresa") {
     n = { ...n, secondsLeft: Math.max(1, n.secondsLeft - 18) };
   }
@@ -708,21 +690,34 @@ function onHint(s: RunState): RunState {
   return say(n, text, "warn");
 }
 
-function hintText(s: RunState): string {
+/** What the prompter says next. In the code stage each line gives away one digit. */
+function hintFor(s: RunState): { text: string; gives?: "uv" | "blinks" | "morse" } {
   const b = s.bomb!;
   if (b.gates.pressure && !s.pressureShunted) {
-    return "Ponticella SW-A e SW-B, i due morsetti sulla chiusura, prima di usare il cacciavite.";
+    return { text: "Ponticella SW-A e SW-B, i due morsetti sulla chiusura, prima di usare il cacciavite." };
   }
-  if (!s.lidOpen) return `Cacciavite sulle chiusure: il ${b.cover} si apre solo con la sicura inserita.`;
+  if (!s.lidOpen) return { text: `Cacciavite sulle chiusure: il ${b.cover} si apre solo con la sicura inserita.` };
   if (b.gates.cap && !s.capDumped) {
-    return "Ponticella COND + sul CARICO FITTIZIO. Mai sull'INNESCO.";
+    return { text: "Ponticella COND + sul CARICO FITTIZIO. Mai sull'INNESCO." };
   }
   if (b.gates.keypad && !s.codeUnlocked) {
-    if (!s.decoded.uv) return "Accendi l'UV: la prima cifra è fuori dal guscio, non su un filo.";
-    if (!s.decoded.blinks) return "Decodifica il cluster: il numero di lampeggi è la seconda cifra.";
-    if (!s.decoded.morse && b.gates.receiver) return "Decodifica l'antenna: batte la terza cifra e, finché non inserisci il codice, ruba secondi.";
-    if (!s.decoded.morse && !b.gates.receiver) return "Senza antenna, l'unica riga vera del piatto è quella che inizia con CIAK.";
-    return `Quarta cifra = fili meno trappole. Contano i tratti sul percorso BAT + → INNESCO, giunti compresi. I rami ciechi no. Codice: ${b.code}.`;
+    if (!s.decoded.uv) {
+      return { gives: "uv", text: `Prima cifra: ${b.code[0]}. Sta ${UV_SPOTS[b.uvSpot]}, e si legge solo con la lampada UV accesa.` };
+    }
+    if (!s.decoded.blinks) {
+      return { gives: "blinks", text: `Seconda cifra: ${b.code[1]}. Sono i lampi del cluster in un ciclo, contati a occhio.` };
+    }
+    if (!s.decoded.morse) {
+      return {
+        gives: "morse",
+        text: b.gates.receiver
+          ? `Terza cifra: ${b.code[2]}. Sono i battiti dell'antenna, che si sentono solo con lo stetoscopio sul ricevitore.`
+          : `Terza cifra: ${b.code[2]}. Senza antenna, è la riga del piatto che inizia con CIAK.`,
+      };
+    }
+    return {
+      text: `Quarta cifra = fili meno trappole, ultima cifra del risultato. Contano i tratti che portano corrente da BAT + all'INNESCO. Codice: ${b.code}.`,
+    };
   }
   const dialNote =
     b.gates.dial && b.dial && !s.dialMatched
@@ -732,7 +727,9 @@ function hintText(s: RunState): string {
   const line = b.wires
     .filter((w) => w.role === "sicura" && !s.cutIds.includes(w.id))
     .map((w) => `${colorName(w.color).toLowerCase()} (${terminalLabel(w.a)} → ${terminalLabel(w.b)})`);
-  return `La linea INIBITORE → BAT − passa da: ${line.join(", ")}. Aprila con la tronchese: se resta un ramo in parallelo, serve un secondo taglio.${dialNote}${tiltNote}`;
+  return {
+    text: `La linea INIBITORE → BAT − passa da: ${line.join(", ")}. Aprila con la tronchese: se resta un ramo in parallelo, serve un secondo taglio.${dialNote}${tiltNote}`,
+  };
 }
 
 export interface Stage {

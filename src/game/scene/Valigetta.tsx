@@ -18,6 +18,7 @@ export const CASE = {
   offset: [0, FLOOR_Y - 0.1 * SYZ, -0.02] as [number, number, number],
   /** Outer face of the front wall, bench space. */
   frontZ: 0.534 * SYZ - 0.02,
+  backZ: -0.534 * SYZ - 0.02,
   wallMidY: FLOOR_Y + (0.1565 - 0.1) * SYZ,
   sideX: 0.622 * SX,
   latchX: 0.41 * SX,

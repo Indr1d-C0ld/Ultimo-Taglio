@@ -35,6 +35,9 @@ export const ARCHETYPES: Record<
   },
 };
 
+/** Faces of the shell where the UV digit may be painted, as the prompter names them. */
+export const UV_SPOTS = ["sul fianco destro", "sul fianco sinistro", "sulla parete posteriore", "sul fondo, verso le chiusure"] as const;
+
 const SLOT: Record<ModuleKind, Vec3> = {
   timer: [0, 0, -0.22],
   battery: [-0.74, 0, -0.16],
@@ -95,6 +98,8 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
   const seconds = difficulty === "comparsa" ? 360 : difficulty === "caratterista" ? 300 : 210;
   const scene = 8 + Math.floor(rng() * 80);
 
+  const uvSpot = Math.floor(rng() * UV_SPOTS.length);
+
   const modules = buildModules(gates, wires);
 
   return {
@@ -114,6 +119,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
       term("sw-b", [0.34, 0.08, 0.78]),
     ],
     uvDigit: String(d0),
+    uvSpot,
     ledBlink: d1,
     plateLines,
   };

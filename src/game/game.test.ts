@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { edgeCarries, lineClosed, netEdges, probeReading, wireSeat } from "./circuit";
-import { reduce, initialState } from "./logic";
+import { reduce, initialState, listenSpan } from "./logic";
 import type { Difficulty, RunState } from "./types";
 
 function play(seed: string, difficulty: Difficulty): RunState {
@@ -233,5 +233,69 @@ describe("ultimo taglio", () => {
     const start = s.secondsLeft;
     for (let i = 0; i < 40; i++) s = reduce(s, { type: "tick", dt: 0.25 });
     expect(s.secondsLeft).toBe(start);
+  });
+});
+
+describe("decodifiche manuali", () => {
+  const digitNote = (s: RunState) => s.notes.some((n) => /cifra/i.test(n));
+
+  test("la lampada UV non scrive la cifra negli appunti", () => {
+    let s = play("UV1", "caratterista");
+    s = reduce(s, { type: "toggle", key: "uv" });
+    expect(s.uv).toBe(true);
+    expect(digitNote(s)).toBe(false);
+    expect(s.log.at(-1)!.text).not.toContain(s.bomb!.uvDigit + ".");
+    expect(s.decoded).toEqual({ uv: false, blinks: false, morse: false });
+  });
+
+  test("la cifra UV non sta sempre sulla stessa faccia", () => {
+    const spots = new Set(SEEDS.map((seed) => play(seed, "caratterista").bomb!.uvSpot));
+    expect(spots.size).toBe(4);
+  });
+
+  test("lo stetoscopio fa ascoltare l'antenna per due giri e non rivela nulla", () => {
+    let s = openUp("ASCOLTO", "caratterista");
+    s = reduce(s, { type: "tool", tool: "occhio" });
+    s = reduce(s, { type: "pointer-part", id: "receiver" });
+    s = reduce(s, { type: "listen" });
+    expect(s.listenLeft).toBe(0);
+    s = reduce(s, { type: "tool", tool: "stetoscopio" });
+    s = reduce(s, { type: "pointer-part", id: "receiver" });
+    expect(s.listenKind).toBe("receiver");
+    expect(s.listenLeft).toBeCloseTo(listenSpan(s.bomb!));
+    for (let i = 0; i < 80 && s.listenLeft > 0; i++) s = reduce(s, { type: "tick", dt: 0.25 });
+    expect(s.listenLeft).toBe(0);
+    expect(digitNote(s)).toBe(false);
+  });
+
+  test("il cluster non si ascolta: si conta a occhio", () => {
+    let s = openUp("LAMPI", "caratterista");
+    s = reduce(s, { type: "tool", tool: "stetoscopio" });
+    s = reduce(s, { type: "pointer-part", id: "leds" });
+    expect(s.listenLeft).toBe(0);
+    expect(s.log.at(-1)!.text).toMatch(/a occhio/);
+  });
+
+  test("il suggeritore regala una cifra per volta, poi il codice", () => {
+    let s = play("CIFRE", "caratterista");
+    const bomb = s.bomb!;
+    s = reduce(s, { type: "tool", tool: "ponticello" });
+    s = reduce(s, { type: "pointer-terminal", id: "sw-a" });
+    s = reduce(s, { type: "pointer-terminal", id: "sw-b" });
+    s = reduce(s, { type: "tool", tool: "cacciavite" });
+    s = reduce(s, { type: "pointer-latch" });
+    s = reduce(s, { type: "tool", tool: "ponticello" });
+    s = reduce(s, { type: "pointer-terminal", id: "cap-hot" });
+    s = reduce(s, { type: "pointer-terminal", id: "cap-load" });
+    const said: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      s = reduce(s, { type: "hint" });
+      said.push(s.log.at(-1)!.text);
+    }
+    expect(said[0]).toContain(`Prima cifra: ${bomb.code[0]}`);
+    expect(said[1]).toContain(`Seconda cifra: ${bomb.code[1]}`);
+    expect(said[2]).toContain(`Terza cifra: ${bomb.code[2]}`);
+    expect(said[3]).toContain(`Codice: ${bomb.code}`);
+    expect(s.decoded).toEqual({ uv: true, blinks: true, morse: true });
   });
 });

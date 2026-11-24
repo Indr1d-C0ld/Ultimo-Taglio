@@ -20,37 +20,7 @@ export function BombCanvas() {
     >
       <color attach="background" args={["#100e0c"]} />
       <fog attach="fog" args={["#100e0c", 7.5, 16]} />
-      <hemisphereLight args={["#f0d2b4", "#1a120e", 0.55]} />
-      <ambientLight intensity={0.18} />
-      <directionalLight
-        position={[4.2, 7.2, 2.6]}
-        intensity={2.6}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-        shadow-camera-far={18}
-        shadow-camera-left={-4}
-        shadow-camera-right={4}
-        shadow-camera-top={4}
-        shadow-camera-bottom={-4}
-      />
-      <spotLight
-        position={[-2.4, 3.6, 1.6]}
-        angle={0.62}
-        penumbra={0.65}
-        intensity={24}
-        color={"#ffd2a8"}
-        castShadow
-      />
-      <pointLight position={[0.15, 0.55, 0.1]} color={"#e23b2b"} intensity={2.2} distance={4.2} />
-      <pointLight position={[-1.2, 0.8, -1.1]} color={"#ffb020"} intensity={0.6} distance={5} />
-      {/* Built in code, no download: gives chrome and glass something to reflect. */}
-      <Environment resolution={256} environmentIntensity={0.55}>
-        <color attach="background" args={["#0b0a09"]} />
-        <Lightformer form="rect" intensity={3} color="#ffd9b0" position={[-3, 4, 2]} scale={[5, 3, 1]} target={[0, 0, 0]} />
-        <Lightformer form="rect" intensity={1.2} color="#9fb4c8" position={[4, 2, -3]} scale={[4, 4, 1]} target={[0, 0, 0]} />
-        <Lightformer form="ring" intensity={2} color="#ff5a3c" position={[0, 3, -4]} scale={2} target={[0, 0, 0]} />
-      </Environment>
+      <Lights />
       <Room />
       <Shake>
         <Suspense fallback={null}>
@@ -61,6 +31,41 @@ export function BombCanvas() {
       <Clock />
       <Maneggio />
     </Canvas>
+  );
+}
+
+/** Stage lighting. With the UV lamp on, the set goes dark and violet so the hidden mark can glow. */
+function Lights() {
+  const uv = useGame((s) => s.uv && s.phase !== "boot");
+  const dim = uv ? 0.14 : 1;
+  return (
+    <>
+      <hemisphereLight args={[uv ? "#7a52d6" : "#f0d2b4", "#1a120e", uv ? 0.5 : 0.55]} />
+      <ambientLight intensity={0.18 * dim} />
+      <directionalLight
+        position={[4.2, 7.2, 2.6]}
+        intensity={2.6 * dim}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+        shadow-camera-far={18}
+        shadow-camera-left={-4}
+        shadow-camera-right={4}
+        shadow-camera-top={4}
+        shadow-camera-bottom={-4}
+      />
+      <spotLight position={[-2.4, 3.6, 1.6]} angle={0.62} penumbra={0.65} intensity={24 * dim} color={"#ffd2a8"} castShadow />
+      <pointLight position={[0.15, 0.55, 0.1]} color={"#e23b2b"} intensity={2.2 * dim} distance={4.2} />
+      <pointLight position={[-1.2, 0.8, -1.1]} color={"#ffb020"} intensity={0.6 * dim} distance={5} />
+      {uv && <pointLight position={[0.4, 1.6, 1.2]} color={"#8a5cff"} intensity={9} distance={7} />}
+      {/* Built in code, no download: gives chrome and glass something to reflect. */}
+      <Environment resolution={256} environmentIntensity={uv ? 0.1 : 0.55}>
+        <color attach="background" args={["#0b0a09"]} />
+        <Lightformer form="rect" intensity={3} color="#ffd9b0" position={[-3, 4, 2]} scale={[5, 3, 1]} target={[0, 0, 0]} />
+        <Lightformer form="rect" intensity={1.2} color="#9fb4c8" position={[4, 2, -3]} scale={[4, 4, 1]} target={[0, 0, 0]} />
+        <Lightformer form="ring" intensity={2} color="#ff5a3c" position={[0, 3, -4]} scale={2} target={[0, 0, 0]} />
+      </Environment>
+    </>
   );
 }
 

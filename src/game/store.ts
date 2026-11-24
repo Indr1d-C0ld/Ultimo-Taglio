@@ -32,6 +32,9 @@ interface UiState {
   /** Module the camera is parked on for a close look. */
   inspectId: string | null;
   setInspect: (id: string | null) => void;
+  /** The player's own jottings for the four code digits. The game never fills or checks them. */
+  codePad: string[];
+  setPad: (index: number, value: string) => void;
   panel: Panel | null;
   /** The run the scene sheet is showing; null means the latest. */
   viewRun: RunRecord | null;
@@ -146,7 +149,7 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [], inspectId: null, hoverId: null });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
     else set({ ...next, ...filed });
   },
@@ -159,6 +162,12 @@ export const useGame = create<GameStore>((set, get) => ({
   },
   inspectId: null,
   setInspect: (inspectId) => set(inspectId ? { inspectId, selectedId: inspectId } : { inspectId: null }),
+  codePad: ["", "", "", ""],
+  setPad: (index, value) => {
+    const codePad = [...get().codePad];
+    codePad[index] = value.replace(/[^0-9]/g, "").slice(-1);
+    set({ codePad });
+  },
   panel: null,
   viewRun: null,
   openPanel: (panel, run) => set({ panel, viewRun: run ?? null }),

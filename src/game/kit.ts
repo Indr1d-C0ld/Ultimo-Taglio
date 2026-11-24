@@ -15,7 +15,7 @@ export const KIT: KitItem[] = [
   { id: "maneggio", label: "Maneggio", group: "mano", fits: "Assetto", blurb: "Inclina l'ordigno. La camera, da sola, non lo fa." },
   { id: "pinzette", label: "Pinzette", group: "mano", fits: "Ponticelli", blurb: "Staccano un coccodrillo. A coperchio aperto, sul microswitch, è il finale." },
   { id: "multimetro", label: "Multimetro", group: "misura", fits: "Morsetti", blurb: "Due sonde. Verso, perla, e se la cella passa da quel tratto." },
-  { id: "stetoscopio", label: "Stetoscopio", group: "misura", fits: "Cluster, antenna", blurb: "Conta i lampeggi o il battito. Senza, la cifra non entra negli appunti." },
+  { id: "stetoscopio", label: "Stetoscopio", group: "misura", fits: "Antenna", blurb: "Fa sentire il battito del ricevitore. Contarlo tocca a te." },
   { id: "nastro", label: "Nastro", group: "misura", fits: "Fili", blurb: "Segna un tratto già letto. Non cambia il circuito." },
   { id: "tronchese", label: "Tronchese", group: "banco", fits: "Fili", blurb: "Apre un tratto. Solo a banco aperto, solo se sai dov'è." },
   { id: "cacciavite", label: "Cacciavite", group: "banco", fits: "Chiusure", blurb: "Alza il coperchio. Prima il ponticello su SW-A e SW-B." },
@@ -47,8 +47,9 @@ export function fitLine(bomb: Bomb | null, id: string | null): string {
     case "cap":
       return "Condensatore: coccodrilli fra COND + e CARICO FITTIZIO.";
     case "leds":
+      return "Cluster: si guarda. I lampi in un ciclo sono la seconda cifra.";
     case "receiver":
-      return "Cluster e antenna: stetoscopio, poi decodifica.";
+      return "Antenna: stetoscopio, poi conta i battiti.";
     case "battery":
       return "Cella: multimetro su BAT +. Se il vetro è morto, la pila di servizio è una sola.";
     case "timer":
