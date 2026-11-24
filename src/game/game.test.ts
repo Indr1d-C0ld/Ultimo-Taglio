@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { edgeCarries, lineClosed, netEdges, probeReading, wireSeat } from "./circuit";
+import { edgeCarries, lineClosed, netEdges, probeReading, wireClass, wireSeat } from "./circuit";
 import { reduce, initialState, listenSpan } from "./logic";
 import type { Difficulty, RunState } from "./types";
 
@@ -69,6 +69,17 @@ function sceneChecks() {
         if (fires(w.id) !== (w.role === "trappola")) throw new Error(`trap role ${tag} ${w.id}`);
         if (holds(w.id) !== (w.role === "sicura")) throw new Error(`line role ${tag} ${w.id}`);
         if (fires(w.id) && holds(w.id)) throw new Error(`nets touch ${tag} ${w.id}`);
+        // The tag on the notebook and the sentence from the meter must tell the same story.
+        const cls = wireClass(bomb, view, w.id);
+        const agree =
+          (cls === "trappola") === seat.includes("segmento di trappola") &&
+          (cls === "linea") === seat.includes("INIBITORE → BAT −") &&
+          (cls === "timer") === seat.includes("TIMER") &&
+          (cls === "cluster") === seat.includes("CLUSTER") &&
+          (cls === "cieco") === seat.includes("Ramo cieco") &&
+          (cls === "morto") === seat.includes("Ritorno morto") &&
+          (cls === "rotto") === seat.includes("Anima interrotta");
+        if (!agree) throw new Error(`class and seat disagree ${tag} ${cls} / ${seat}`);
         if (w.role === "trappola" && !seat.includes("trappola")) throw new Error(`trap misread ${tag} ${seat}`);
         if (w.role === "sicura" && !seat.includes("INIBITORE → BAT −")) throw new Error(`line misread ${tag} ${seat}`);
         if (w.role === "alimentazione" && !seat.includes("TIMER")) throw new Error(`power misread ${tag} ${seat}`);

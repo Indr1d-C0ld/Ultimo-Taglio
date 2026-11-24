@@ -52,6 +52,9 @@ interface UiState {
   /** Bloom, depth of field and vignette. Off for a machine that struggles with them. */
   effects: boolean;
   toggleEffects: () => void;
+  /** The circuit notebook, floating over the bench. */
+  notebook: boolean;
+  toggleNotebook: () => void;
   /** Counts scenes started, so the opening slate replays on every take. */
   take: number;
   /** The campaign screen. */
@@ -189,8 +192,10 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, take: prev.take + 1, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, take: prev.take + 1, notebook: false, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
+    // The first reading of a scene opens the notebook, once: after that it is the player's to keep or close.
+    else if (prev.knownWireIds.length === 0 && next.knownWireIds.length === 1) set({ ...next, ...filed, notebook: true });
     else set({ ...next, ...filed });
   },
   save: loadSave(),
@@ -208,6 +213,8 @@ export const useGame = create<GameStore>((set, get) => ({
     writeFlag("ultimo-taglio-effetti", effects);
     set({ effects });
   },
+  notebook: false,
+  toggleNotebook: () => set({ notebook: !get().notebook }),
   take: 0,
   film: false,
   toggleFilm: () => set({ film: !get().film }),

@@ -36,6 +36,7 @@ import { activeProfile, markRead } from "../save";
 import { AWARDS, GRADES, dailySeed } from "../stats";
 import { Records } from "./Records";
 import { Film } from "./Film";
+import { Notebook } from "./Notebook";
 import { MODIFIERS, nextScene, sceneById, stopLine, ciakOf, filmProgress } from "../campaign";
 import { emitView, useGame } from "../store";
 import { TUNING } from "../tuning";
@@ -88,6 +89,7 @@ export function App() {
         return;
       }
       if (st.archive || st.panel || st.film || st.phase !== "play") return;
+      if (event.key === "t" || event.key === "T") st.toggleNotebook();
       if (event.key === "e" || event.key === "E") st.dispatch({ type: "toggle", key: "exploded" });
       if (event.key === "x" || event.key === "X") st.dispatch({ type: "toggle", key: "xray" });
       if (event.key === "u" || event.key === "U") st.dispatch({ type: "toggle", key: "uv" });
@@ -132,6 +134,7 @@ export function App() {
             <BridgeMeter />
             <InspectBar />
             <SceneRules />
+            <Notebook />
             <HoverChip />
           </div>
           <Dossier />
@@ -537,6 +540,8 @@ function Dossier() {
   const dispatch = useGame((s) => s.dispatch);
   const toggleDossier = useGame((s) => s.toggleDossier);
   const known = useGame((s) => s.knownWireIds);
+  const notebook = useGame((s) => s.notebook);
+  const toggleNotebook = useGame((s) => s.toggleNotebook);
   if (phase === "boot" || !bomb) return null;
 
   const wire = findWire(bomb, selectedId);
@@ -590,6 +595,9 @@ function Dossier() {
           </button>
         ))}
       </div>
+      <button type="button" onClick={toggleNotebook} className="mt-3 h-10 w-full rounded-sm border border-line text-xs text-fg">
+        {notebook ? "Chiudi il taccuino (T)" : "Apri il taccuino: schema del circuito (T)"}
+      </button>
       <CodePad />
       <Notes />
       <button type="button" onClick={() => dispatch({ type: "hint" })} className="mt-3 h-11 w-full rounded-sm border border-line text-sm text-lcd">

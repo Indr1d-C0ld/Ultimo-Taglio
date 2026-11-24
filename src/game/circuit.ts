@@ -122,6 +122,27 @@ function directWire(bomb: Bomb, view: NetView, a: string, b: string): Wire | und
   );
 }
 
+export type WireClass = "trappola" | "linea" | "timer" | "cluster" | "cieco" | "morto" | "rotto";
+
+/** What the meter makes of a wire, as a tag. The sentence for the same reading is wireSeat(). */
+export function wireClass(bomb: Bomb, view: NetView, wireId: string): WireClass | null {
+  const wire = bomb.wires.find((w) => w.id === wireId);
+  if (!wire) return null;
+  if (wire.open) return "rotto";
+  const present: NetView = { ...view, cutIds: view.cutIds.filter((id) => id !== wireId) };
+  const edges = netEdges(bomb, present);
+  const hard = hardEdges(bomb, present);
+  if (edgeCarries(edges, "bat-pos", "det-in", wire.id)) return "trappola";
+  if (edgeCarries(edges, "bat-pos", "timer-vin", wire.id)) return "timer";
+  if (edgeCarries(edges, "rx-out", "led-in", wire.id) || edgeCarries(edges, "led-in", "rx-out", wire.id)) return "cluster";
+  if (edgeCarries(hard, "det-inhibit", "bat-neg", wire.id)) return "linea";
+  const without = edges.filter((e) => e.id !== wire.id);
+  const anchors = ["det-in", "det-inhibit", "bat-neg", "bat-pos"];
+  const touches = (end: string) =>
+    anchors.some((t) => end === t || !!directedPath(without, end, t) || !!directedPath(without, t, end));
+  return touches(wire.a) || touches(wire.b) ? "cieco" : "morto";
+}
+
 export function wireSeat(bomb: Bomb, view: NetView, wireId: string): string {
   const wire = bomb.wires.find((w) => w.id === wireId);
   if (!wire) return "";
