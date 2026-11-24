@@ -310,7 +310,8 @@ function Controls() {
       }}
       minDistance={inspectId ? 0.3 : 1.15}
       maxDistance={8.5}
-      maxPolarAngle={Math.PI * 0.92}
+      // A little below the horizon, to read the walls from low down; never under the table.
+      maxPolarAngle={Math.PI * 0.56}
       minPolarAngle={0.18}
     />
   );

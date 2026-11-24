@@ -2,7 +2,6 @@ import { Billboard } from "@react-three/drei";
 import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { formatClock } from "../logic";
 import { colorHex, terminalLabel } from "../palette";
 import { useGame } from "../store";
 import type { Bomb, Module, Vec3, Wire } from "../types";
@@ -37,8 +36,11 @@ function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | nul
   if (!chassis) return null;
   const shell = SHELLS[bomb.archetype];
   if (shell) {
+    // Where a clip or a probe meets the post: its free end, top or front.
     const post = swPost(shell, id === "sw-a" ? -1 : 1);
-    return new THREE.Vector3(post[0], post[1], post[2] + 0.04);
+    return shell.posts.upright
+      ? new THREE.Vector3(post[0], post[1] + 0.03, post[2])
+      : new THREE.Vector3(post[0], post[1], post[2] + 0.04);
   }
   return new THREE.Vector3(chassis.local[0], chassis.local[1], chassis.local[2]);
 }
@@ -79,19 +81,14 @@ export function roomDrop(archetype: Bomb["archetype"]): number {
 
 /** Microswitch posts on a shell: outside, on the front band, between plate and catches. */
 function swPost(shell: ShellFit, side: 1 | -1): Vec3 {
-  return [side * shell.postX, shell.wallMidY, shell.frontZ + 0.04];
+  return [side * shell.posts.x, shell.posts.y, shell.posts.z];
 }
 
 /** Where a module sits on the bench, in bench space. */
 function moduleHome(bomb: Bomb, mod: Module, exploded: boolean): Vec3 {
   const shell = SHELLS[bomb.archetype];
-  // On a shell the plate is either riveted upright to the front band or lies on the table before it.
-  const home: Vec3 =
-    mod.kind !== "plate" || !shell
-      ? mod.position
-      : shell.plate === "front"
-        ? [0, shell.wallMidY - shell.plateDrop, shell.frontZ - 0.018]
-        : [0, shell.bottomY, shell.frontZ + 0.24];
+  // Each shell says where its plate goes: riveted to a wall, hung from a flange, laid on a shelf.
+  const home: Vec3 = mod.kind === "plate" && shell ? shell.plate.position : mod.position;
   const extra = exploded ? mod.explode : [0, 0, 0];
   return [home[0] + extra[0]!, home[1] + extra[1]!, home[2] + extra[2]!];
 }
@@ -155,119 +152,18 @@ function Chassis() {
       <group>
         <ShellModel fit={fitted} open={open} xray={xray} />
         {[-1, 1].map((side) => (
-          <mesh key={side} position={[side * fitted.latchX, fitted.wallMidY + 0.06, fitted.frontZ + 0.03]} onClick={latch}>
+          <mesh key={side} position={[side * fitted.latch.x, fitted.latch.y, fitted.latch.z]} onClick={latch}>
             <boxGeometry args={[0.22, 0.3, 0.12]} />
             <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
           </mesh>
         ))}
-        <Post id="sw-a" position={swPost(fitted, -1)} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
-        <Post id="sw-b" position={swPost(fitted, 1)} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
+        <Post id="sw-a" position={swPost(fitted, -1)} rotation={fitted.posts.upright ? undefined : [Math.PI / 2, 0, 0]} owner="chassis" />
+        <Post id="sw-b" position={swPost(fitted, 1)} rotation={fitted.posts.upright ? undefined : [Math.PI / 2, 0, 0]} owner="chassis" />
       </group>
     );
   }
-  const shell = archetype === "cilindro" ? "#3c4248" : "#3d4634";
-  const opacity = xray ? 0.16 : 1;
-  return (
-    <group>
-      <mesh position={[0, -0.1, -0.02]} castShadow receiveShadow>
-        <boxGeometry args={[2.12, 0.26, 1.78]} />
-        <meshStandardMaterial
-          color={shell}
-          roughness={0.62}
-          metalness={0.55}
-          transparent={xray}
-          opacity={opacity}
-          depthWrite={!xray}
-        />
-      </mesh>
-      <mesh position={[0, 0.02, -0.02]}>
-        <boxGeometry args={[1.92, 0.03, 1.52]} />
-        <meshStandardMaterial color="#8a8680" metalness={0.82} roughness={0.32} />
-      </mesh>
-      {archetype === "cilindro" && (
-        <mesh position={[0, -0.28, -0.02]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.42, 0.42, 2.2, 24]} />
-          <meshStandardMaterial color="#2c3238" metalness={0.7} roughness={0.38} />
-        </mesh>
-      )}
-      {archetype === "console" && (
-        <mesh position={[0, -0.02, 0.72]} rotation={[-0.55, 0, 0]} castShadow>
-          <boxGeometry args={[2.05, 0.08, 0.42]} />
-          <meshStandardMaterial color="#2a3124" metalness={0.4} roughness={0.5} />
-        </mesh>
-      )}
-      <Cover open={open}>
-        <mesh position={[-0.9, 0.16, -0.05]} castShadow>
-          <boxGeometry args={[0.2, 0.07, 1.48]} />
-          <meshStandardMaterial color={xray ? "#d9d3c8" : "#141210"} metalness={0.45} roughness={0.4} transparent={xray} opacity={xray ? 0.12 : 1} depthWrite={!xray} />
-        </mesh>
-        <mesh position={[0.9, 0.16, -0.05]} castShadow>
-          <boxGeometry args={[0.2, 0.07, 1.48]} />
-          <meshStandardMaterial color={xray ? "#d9d3c8" : "#141210"} metalness={0.45} roughness={0.4} transparent={xray} opacity={xray ? 0.12 : 1} depthWrite={!xray} />
-        </mesh>
-        <mesh position={[0, 0.16, -0.7]} castShadow>
-          <boxGeometry args={[1.62, 0.07, 0.18]} />
-          <meshStandardMaterial color={xray ? "#d9d3c8" : "#141210"} metalness={0.45} roughness={0.4} transparent={xray} opacity={xray ? 0.12 : 1} depthWrite={!xray} />
-        </mesh>
-        <mesh position={[0, 0.16, 0.58]} castShadow>
-          <boxGeometry args={[1.62, 0.07, 0.22]} />
-          <meshStandardMaterial color={xray ? "#d9d3c8" : "#141210"} metalness={0.45} roughness={0.4} transparent={xray} opacity={xray ? 0.12 : 1} depthWrite={!xray} />
-        </mesh>
-        <mesh position={[0, 0.2, -0.08]} rotation={[-Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[1.55, 1.1]} />
-          <meshStandardMaterial
-            color="#7ec8ea"
-            transparent
-            opacity={xray ? 0.02 : 0.08}
-            roughness={0.05}
-            metalness={0.05}
-            depthWrite={false}
-          />
-        </mesh>
-        <mesh
-          position={[-0.34, 0.22, 0.62]}
-          onClick={(e) => {
-            e.stopPropagation();
-            dispatch({ type: "pointer-latch" });
-          }}
-        >
-          <boxGeometry args={[0.22, 0.08, 0.1]} />
-          <meshStandardMaterial color="#d5d0c6" metalness={0.85} roughness={0.25} />
-        </mesh>
-        <mesh
-          position={[0.34, 0.22, 0.62]}
-          onClick={(e) => {
-            e.stopPropagation();
-            dispatch({ type: "pointer-latch" });
-          }}
-        >
-          <boxGeometry args={[0.22, 0.08, 0.1]} />
-          <meshStandardMaterial color="#d5d0c6" metalness={0.85} roughness={0.25} />
-        </mesh>
-      </Cover>
-      <Post id="sw-a" position={[-0.34, 0.1, 0.78]} />
-      <Post id="sw-b" position={[0.34, 0.1, 0.78]} />
-      <mesh position={[0, 0.08, 0.9]}>
-        <boxGeometry args={[0.7, 0.02, 0.18]} />
-        <meshStandardMaterial color="#1a1816" />
-      </mesh>
-    </group>
-  );
-}
-
-function Cover({ open, children }: { open: boolean; children: React.ReactNode }) {
-  const ref = useRef<THREE.Group>(null);
-  const anim = useRef(0);
-  useFrame((_, delta) => {
-    const d = Math.min(delta, 0.1);
-    anim.current += ((open ? 1 : 0) - anim.current) * Math.min(1, d * 4.5);
-    if (ref.current) ref.current.rotation.x = -anim.current * 1.95;
-  });
-  return (
-    <group ref={ref} position={[0, 0.04, -0.8]}>
-      <group position={[0, 0, 0.8]}>{children}</group>
-    </group>
-  );
+  // Every carriage has a generated shell now; this is only reached if a file is missing from the specs.
+  return null;
 }
 
 function ModuleMesh({ mod }: { mod: Module }) {
@@ -276,7 +172,7 @@ function ModuleMesh({ mod }: { mod: Module }) {
   const selected = useGame((s) => s.selectedId === mod.id);
   const dispatch = useGame((s) => s.dispatch);
   if (!bomb) return null;
-  const upright = mod.kind === "plate" && SHELLS[bomb.archetype]?.plate === "front";
+  const upright = mod.kind === "plate" && !!SHELLS[bomb.archetype]?.plate.upright;
   return (
     <group
       position={moduleHome(bomb, mod, exploded)}
@@ -430,67 +326,6 @@ function PlateMesh({ selected }: { selected: boolean }) {
         <meshBasicMaterial map={map} toneMapped={false} />
       </mesh>
     </group>
-  );
-}
-
-function Silk({
-  title,
-  sub,
-  y,
-  z = 0,
-  w = 0.32,
-  h = 0.1,
-}: {
-  title: string;
-  sub: string;
-  y: number;
-  z?: number;
-  w?: number;
-  h?: number;
-}) {
-  const map = useMemo(
-    () =>
-      paint(`silk-${title}-${sub}`, 256, 96, (ctx) => {
-        ctx.clearRect(0, 0, 256, 96);
-        ctx.fillStyle = "#141210";
-        ctx.fillRect(0, 0, 256, 96);
-        ctx.strokeStyle = "#e23b2b";
-        ctx.lineWidth = 4;
-        ctx.strokeRect(3, 3, 250, 90);
-        ctx.fillStyle = "#f4efe6";
-        ctx.font = "600 32px sans-serif";
-        ctx.fillText(title, 14, 42);
-        ctx.fillStyle = "#a89884";
-        ctx.font = "18px sans-serif";
-        ctx.fillText(sub, 14, 72);
-      }),
-    [title, sub],
-  );
-  return (
-    <mesh position={[0, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[w, h]} />
-      <meshBasicMaterial map={map} toneMapped={false} />
-    </mesh>
-  );
-}
-
-function DigitReadout({ text, y, z }: { text: string; y: number; z: number }) {
-  const map = useMemo(
-    () =>
-      paint(`dig-${text}`, 256, 80, (ctx) => {
-        ctx.fillStyle = "#100c09";
-        ctx.fillRect(0, 0, 256, 80);
-        ctx.fillStyle = "#ffb020";
-        ctx.font = "600 48px monospace";
-        ctx.fillText(text, 16, 56);
-      }),
-    [text],
-  );
-  return (
-    <mesh position={[0, y, z]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[0.16, 0.05]} />
-      <meshBasicMaterial map={map} toneMapped={false} />
-    </mesh>
   );
 }
 

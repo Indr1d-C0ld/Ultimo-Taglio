@@ -38,6 +38,10 @@ interface ShellSpec {
   plateDrop?: number;
   /** Half the gap between the two microswitch posts, bench units. */
   postX?: number;
+  /** Overrides, in bench space, for shells whose front is not a plain wall with the catches on it. */
+  plateAt?: { position: [number, number, number]; upright: boolean };
+  posts?: { x: number; y: number; z: number; upright: boolean };
+  latch?: { y: number; z: number };
   /** UV digit places for shells whose walls are not flat boxes, bench space. Deck spot is added by the scene. */
   uv?: { position: [number, number, number]; rotation: [number, number, number] }[];
 }
@@ -83,6 +87,27 @@ const SPECS: Partial<Record<Archetype, ShellSpec>> = {
       { position: [0.3, -0.334, -0.83], rotation: [0, Math.PI, 0] },
     ],
   },
+  // A desk console: the hood covers the back two thirds of the deck and leaves a shelf in front,
+  // which is where the plate lies and the microswitch posts stand. The fit is taken from the
+  // area under the hood, not from the whole deck.
+  console: {
+    file: "console",
+    lid: "Glazed_Hood_Group",
+    glass: /Hood_Glass/,
+    keep: /^Deck/,
+    deck: { y: 0.271, halfX: 0.93, halfZ: 0.59, centerZ: -0.2385 },
+    hinge: { y: 0.275, z: -0.866 },
+    front: 0.849,
+    back: -0.849,
+    side: 1,
+    band: { low: 0.006, high: 0.265 },
+    bottom: 0,
+    latchX: 0.616,
+    plate: "front",
+    plateAt: { position: [0, 0.031, 1.16], upright: false },
+    posts: { x: 0.4, y: 0.068, z: 0.93, upright: true },
+    latch: { y: 0.13, z: 0.84 },
+  },
 };
 
 /** A shell fitted to the bench: scale, offset and the landmarks the rest of the scene hangs things on. */
@@ -99,9 +124,12 @@ export interface ShellFit {
   latchX: number;
   /** Underside of the shell, bench space: what rests on the table. */
   bottomY: number;
-  plate: "front" | "table";
-  plateDrop: number;
-  postX: number;
+  /** Where the engraved plate sits and whether it stands against a wall or lies flat. */
+  plate: { position: [number, number, number]; upright: boolean };
+  /** One microswitch post; the other mirrors it across X. Upright posts stand, the others point forward. */
+  posts: { x: number; y: number; z: number; upright: boolean };
+  /** Centre of the clickable area over one catch; the other mirrors it. */
+  latch: { x: number; y: number; z: number };
   uv?: ShellSpec["uv"];
 }
 
@@ -112,6 +140,9 @@ function fit(spec: ShellSpec): ShellFit {
   const syz = DECK.halfZ / spec.deck.halfZ;
   const oy = FLOOR_Y - spec.deck.y * syz;
   const oz = DECK.centerZ - spec.deck.centerZ * syz;
+  const frontZ = spec.front * syz + oz;
+  const wallMidY = ((spec.band.low + spec.band.high) / 2) * syz + oy;
+  const bottomY = spec.bottom * syz + oy;
   return {
     spec,
     scale: [sx, syz, syz],
@@ -123,10 +154,14 @@ function fit(spec: ShellSpec): ShellFit {
     wallMidY: ((spec.band.low + spec.band.high) / 2) * syz + oy,
     wallHeight: (spec.band.high - spec.band.low) * syz,
     latchX: spec.latchX * sx,
-    bottomY: spec.bottom * syz + oy,
-    plate: spec.plate,
-    plateDrop: spec.plateDrop ?? 0,
-    postX: spec.postX ?? 0.545,
+    bottomY,
+    plate:
+      spec.plateAt ??
+      (spec.plate === "front"
+        ? { position: [0, wallMidY - (spec.plateDrop ?? 0), frontZ - 0.018], upright: true }
+        : { position: [0, bottomY, frontZ + 0.24], upright: false }),
+    posts: spec.posts ?? { x: spec.postX ?? 0.545, y: wallMidY, z: frontZ + 0.04, upright: false },
+    latch: { x: spec.latchX * sx, y: spec.latch?.y ?? wallMidY + 0.06, z: spec.latch?.z ?? frontZ + 0.03 },
     uv: spec.uv,
   };
 }
