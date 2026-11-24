@@ -144,6 +144,7 @@ function toRun(s: GameStore): RunState {
     bridgeWarned: s.bridgeWarned,
     endCause: s.endCause,
     tally: s.tally,
+    rush: s.rush,
     mods: s.mods,
     campaign: s.campaign,
   };
@@ -168,7 +169,7 @@ export const useGame = create<GameStore>((set, get) => ({
       stopScore();
     } else if (action.type === "tick" && next.phase === "play" && next.bomb) {
       const clock = next.mode === "ripresa" ? 1 - next.secondsLeft / next.bomb.seconds : 0.2;
-      setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0));
+      setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0) + (next.rush ? 0.25 : 0));
     }
     if (prev.phase === "play" && next.phase === "safe") fx.shake = 0.06;
     if (prev.sound) {

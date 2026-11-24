@@ -10,7 +10,8 @@ const H = 378;
 /** Fixed places for the terminals every scene has. Joints and bus ends are laid out as they turn up. */
 const PLACE: Record<string, [number, number]> = {
   "bat-pos": [84, 74],
-  "timer-vin": [300, 34],
+  "timer-vin": [270, 34],
+  "timer-clk": [352, 34],
   "det-in": [516, 74],
   "det-inhibit": [516, 262],
   "bat-neg": [84, 262],
@@ -25,6 +26,7 @@ const CLASS: Record<WireClass, { label: string; tone: string }> = {
   linea: { label: "LINEA", tone: "#d6e38a" },
   timer: { label: "TIMER", tone: "#ffb020" },
   cluster: { label: "CLUSTER", tone: "#ffb020" },
+  quarzo: { label: "QUARZO", tone: "#e23b2b" },
   cieco: { label: "CIECO", tone: "#a89884" },
   morto: { label: "MORTO", tone: "#6f6256" },
   rotto: { label: "ROTTO", tone: "#6f6256" },
@@ -71,7 +73,8 @@ export function Notebook() {
   const pads = new Set<string>(["bat-pos", "bat-neg", "det-in", "det-inhibit", "timer-vin"]);
   if (bomb.gates.cap) for (const id of ["cap-hot", "cap-load"]) pads.add(id);
   if (bomb.wires.some((w) => w.role === "senso")) for (const id of ["rx-out", "led-in"]) pads.add(id);
-  for (const id of Object.keys(harness)) pads.add(id);
+  // Whatever a measured wire lands on gets its pad, CLOCK included.
+  for (const w of wires) for (const id of [w.a, w.b]) pads.add(id);
 
   const focus = hoverId?.startsWith("w:") ? hoverId.slice(2) : wires.some((w) => w.id === selectedId) ? selectedId : null;
   const focused = wires.find((w) => w.id === focus);

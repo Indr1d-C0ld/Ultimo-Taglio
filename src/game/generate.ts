@@ -74,7 +74,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
     receiver: difficulty === "comparsa" ? rng() > 0.45 : true,
   };
 
-  const wires = makeWires(difficulty, rng);
+  const wires = withQuartz(makeWires(difficulty, rng), seed, difficulty);
   const d0 = 1 + Math.floor(rng() * 9);
   const d1 = 1 + Math.floor(rng() * 9);
   const d2 = 1 + Math.floor(rng() * 9);
@@ -240,6 +240,31 @@ function relabel(drafts: Draft[], rng: Rng): Draft[] {
   return drafts.map((d) => ({ ...d, a: rename(d.a), b: rename(d.b) }));
 }
 
+/** Chance that a scene carries the quartz wire: the one that, cut, makes the countdown race. */
+const QUARTZ: Record<Difficulty, number> = { comparsa: 0, caratterista: 0.5, protagonista: 1 };
+
+/**
+ * Adds the quartz wire from the timer's CLOCK post to a bus end of its own. It draws from
+ * a separate stream so that scenes keep the wiring they had before this wire existed.
+ */
+function withQuartz(wires: Wire[], seed: string, diff: Difficulty): Wire[] {
+  const rng = mulberry32(hashString(`${seed}|${diff}|quarzo`));
+  if (rng() >= QUARTZ[diff]) return wires;
+  const taken = wires.flatMap((w) => [w.a, w.b]).filter((e) => e.startsWith("h-")).map((e) => Number(e.slice(4)));
+  const free = taken.length ? Math.max(...taken) + 1 : 0;
+  const quartz: Wire = {
+    id: "",
+    color: pick(rng, Object.keys(WIRE_COLORS) as WireColor[]),
+    role: "quarzo",
+    a: "timer-clk",
+    b: `h-l-${free}`,
+    diode: null,
+    open: false,
+  };
+  const at = Math.floor(rng() * (wires.length + 1));
+  return [...wires.slice(0, at), quartz, ...wires.slice(at)].map((w, i) => ({ ...w, id: `w${i}` }));
+}
+
 function makeWires(diff: Difficulty, rng: Rng): Wire[] {
   const drafts = shuffle(relabel(draftWires(diff, rng), rng), rng);
   const bare: Wire[] = drafts.map((d, i) => ({
@@ -281,7 +306,10 @@ function buildModules(gates: Gates, wires: Wire[]): Module[] {
   });
 
   const list: Module[] = [
-    mod("timer", "Timer LCD", [term("timer-vin", [-0.3, 0.2, 0.165])]),
+    mod("timer", "Timer LCD", [
+      term("timer-vin", [-0.3, 0.2, 0.165]),
+      ...(wires.some((w) => w.role === "quarzo") ? [term("timer-clk", [0.1, 0.2, 0.165])] : []),
+    ]),
     mod("harness", "Cablaggio di scena", harnessTerms),
     mod("battery", "Cella di palco", [
       term("bat-pos", [0.115, 0.22, -0.01]),

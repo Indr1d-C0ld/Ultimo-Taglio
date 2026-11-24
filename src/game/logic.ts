@@ -58,6 +58,7 @@ export function initialState(): RunState {
     bridgeHot: false,
     bridgeCause: null,
     bridgeWarned: false,
+    rush: false,
     mods: [],
     campaign: null,
     endCause: null,
@@ -334,7 +335,7 @@ function tick(s: RunState, dt: number): RunState {
   if (n.mode !== "ripresa" || !n.bomb) return n;
   const bomb = n.bomb;
 
-  let acc = n.timeAcc + step;
+  let acc = n.timeAcc + step * (n.rush ? 2 : 1);
   let left = n.secondsLeft;
   let whole = 0;
   while (acc >= 1) {
@@ -527,6 +528,10 @@ function onWire(s: RunState, id: string): RunState {
       return say(n, `${colorName(wire.color)} tagliato a fatica: la tronchese spuntata si mangia ${BLUNT_CUT_COST} secondi. ${wireSeat(bomb, viewOf(n), id)}`, "warn");
     }
     return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
+  }
+  if (wire.role === "quarzo") {
+    n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id), rush: true, mistakes: n.mistakes + 1 };
+    return say(n, "Hai tagliato il quarzo. Il timer non si ferma: perde il passo e il conto corre al doppio.", "bad");
   }
   if (wire.role === "senso") {
     n = {

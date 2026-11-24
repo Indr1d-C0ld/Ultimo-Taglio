@@ -4,7 +4,7 @@ import type { Bomb, Difficulty, Modifier } from "./types";
 export const TUNING: Record<Difficulty, { seconds: number; pingEvery: number; pingCost: number }> = {
   comparsa: { seconds: 420, pingEvery: 40, pingCost: 5 },
   caratterista: { seconds: 360, pingEvery: 30, pingCost: 6 },
-  protagonista: { seconds: 300, pingEvery: 25, pingCost: 7 },
+  protagonista: { seconds: 310, pingEvery: 25, pingCost: 7 },
 };
 
 /** Seconds a blunt cutter costs for every cut that was not needed. */

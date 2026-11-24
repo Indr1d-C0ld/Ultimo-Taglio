@@ -5,12 +5,13 @@ import { useGame } from "../store";
 import type { Tool } from "../types";
 
 /** Where the pointer touches the set, shared between the tracker and the tool that follows it. */
-const hand = { point: new THREE.Vector3(), over: false, actAt: -10 };
+const hand = { point: new THREE.Vector3(), over: false, actAt: -10, touchedAt: 0, movedAt: 0 };
 
 /** Reports a point the pointer is touching. Parts that stop pointer events from bubbling call this themselves. */
 export function touch(point: THREE.Vector3) {
   hand.point.copy(point);
   hand.over = true;
+  hand.touchedAt = performance.now();
 }
 
 /** Wraps the set: every pointer move over it tells the hand where the tool tip should be. */
@@ -284,9 +285,15 @@ export function ToolInHand() {
     const leave = () => {
       hand.over = false;
     };
+    const moved = () => {
+      hand.movedAt = performance.now();
+      hand.over = true;
+    };
+    el.addEventListener("pointermove", moved);
     el.addEventListener("pointerdown", act);
     el.addEventListener("pointerleave", leave);
     return () => {
+      el.removeEventListener("pointermove", moved);
       el.removeEventListener("pointerdown", act);
       el.removeEventListener("pointerleave", leave);
     };
@@ -307,12 +314,22 @@ export function ToolInHand() {
     });
   }, [tool, shown]);
 
-  useFrame(({ camera, clock }, delta) => {
+  useFrame(({ camera, clock, pointer, raycaster }, delta) => {
     const g = group.current;
     if (!g) return;
     g.visible = shown && hand.over;
     if (!g.visible) return;
     const st = useGame.getState();
+    // The pointer has moved but touched nothing (it is over empty backdrop): since the model is
+    // the cursor, it must still follow. Carry it on a level plane at the height it last had.
+    if (hand.movedAt - hand.touchedAt > 120) {
+      raycaster.setFromCamera(pointer, camera);
+      const ray = raycaster.ray;
+      if (Math.abs(ray.direction.y) > 1e-4) {
+        const t = (hand.point.y - ray.origin.y) / ray.direction.y;
+        if (t > 0 && t < 30) hand.point.copy(ray.origin).addScaledVector(ray.direction, t);
+      }
+    }
     // Lean the grip toward the camera and a little to the right, as a right hand would hold it.
     scratch.flat.copy(camera.position).sub(hand.point).setY(0).normalize();
     scratch.side.crossVectors(scratch.up, scratch.flat);

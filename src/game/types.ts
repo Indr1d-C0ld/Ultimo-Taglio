@@ -17,7 +17,7 @@ export type Tool =
   | "maneggio"
   | "uv";
 
-export type WireRole = "sicura" | "trappola" | "esca" | "alimentazione" | "senso";
+export type WireRole = "sicura" | "trappola" | "esca" | "alimentazione" | "senso" | "quarzo";
 
 export type ModuleKind =
   | "timer"
@@ -149,6 +149,8 @@ export interface RunState {
   /** Short machine tag for how the scene ended; the sentence is in endReason. */
   endCause: EndCause | null;
   tally: Tally;
+  /** The quartz wire was cut: the countdown runs at double speed for the rest of the scene. */
+  rush: boolean;
   /** Scene rules in force, set by the campaign. Free scenes have none. */
   mods: Modifier[];
   /** Id of the campaign scene being shot, or null for a free scene. */

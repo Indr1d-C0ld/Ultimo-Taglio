@@ -74,8 +74,9 @@ function sceneChecks() {
         const agree =
           (cls === "trappola") === seat.includes("segmento di trappola") &&
           (cls === "linea") === seat.includes("INIBITORE → BAT −") &&
-          (cls === "timer") === seat.includes("TIMER") &&
+          (cls === "timer") === seat.includes("Fra cella e TIMER") &&
           (cls === "cluster") === seat.includes("CLUSTER") &&
+          (cls === "quarzo") === seat.includes("Filo del quarzo") &&
           (cls === "cieco") === seat.includes("Ramo cieco") &&
           (cls === "morto") === seat.includes("Ritorno morto") &&
           (cls === "rotto") === seat.includes("Anima interrotta");
@@ -310,3 +311,51 @@ describe("decodifiche manuali", () => {
     expect(s.decoded).toEqual({ uv: true, blinks: true, morse: true });
   });
 });
+
+describe("filo del quarzo", () => {
+  test("mai in comparsa, sempre in protagonista, a volte in caratterista, e mai più di uno", () => {
+    const count = (d: Difficulty) => SEEDS.map((seed) => play(seed, d).bomb!.wires.filter((w) => w.role === "quarzo").length);
+    expect(Math.max(...count("comparsa"))).toBe(0);
+    expect(new Set(count("protagonista"))).toEqual(new Set([1]));
+    const mid = count("caratterista");
+    expect(Math.max(...mid)).toBe(1);
+    expect(mid.filter((n) => n === 1).length).toBeGreaterThan(40);
+    expect(mid.filter((n) => n === 0).length).toBeGreaterThan(40);
+  });
+
+  test("sta sul morsetto CLOCK, fuori da ogni percorso, e non sempre nello stesso posto dell'elenco", () => {
+    const places = new Set<number>();
+    for (const seed of SEEDS) {
+      const bomb = play(seed, "protagonista").bomb!;
+      const i = bomb.wires.findIndex((w) => w.role === "quarzo");
+      places.add(i);
+      const quartz = bomb.wires[i]!;
+      expect(quartz.a).toBe("timer-clk");
+      expect(bomb.modules.find((m) => m.id === "timer")!.terminals.map((t) => t.id)).toContain("timer-clk");
+      const view = { cutIds: [] as string[], jumpers: [], codeUnlocked: true, capDumped: true };
+      const edges = netEdges(bomb, view);
+      expect(edgeCarries(edges, "bat-pos", "det-in", quartz.id)).toBe(false);
+      expect(edgeCarries(edges, "det-inhibit", "bat-neg", quartz.id)).toBe(false);
+      expect(wireClass(bomb, view, quartz.id)).toBe("quarzo");
+    }
+    expect(places.size).toBeGreaterThan(5);
+  });
+
+  test("tagliarlo non ferma il timer: lo fa correre al doppio", () => {
+    let s = openUp("QUARZO", "protagonista");
+    const quartz = s.bomb!.wires.find((w) => w.role === "quarzo")!;
+    const run = (state: RunState) => {
+      let n = state;
+      const from = n.secondsLeft;
+      for (let i = 0; i < 16; i++) n = reduce(n, { type: "tick", dt: 0.25 });
+      return from - n.secondsLeft;
+    };
+    expect(run(s)).toBe(4);
+    s = reduce(s, { type: "pointer-wire", id: quartz.id });
+    expect(s.phase).toBe("play");
+    expect(s.rush).toBe(true);
+    expect(s.mistakes).toBe(1);
+    expect(run(s)).toBe(8);
+  });
+});
+

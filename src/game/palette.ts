@@ -29,6 +29,7 @@ export const TERMINAL_LABELS: Record<string, string> = {
   "cap-hot": "COND +",
   "cap-load": "CARICO FITTIZIO",
   "timer-vin": "TIMER",
+  "timer-clk": "CLOCK",
   "rx-out": "RX",
   "led-in": "CLUSTER",
   "sw-a": "SW-A",

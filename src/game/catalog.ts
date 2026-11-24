@@ -41,6 +41,7 @@ export const ARTICLES: Article[] = [
       "Il display a sette segmenti è il cliché che tiene la scena. In ripresa scende davvero. In prova generale resta fermo, per studiare.",
       "Sotto i dieci secondi il bip sale di tono. Se l'alimentazione viene tagliata a condensatore già scarico, il vetro si spegne ma il conteggio no: lo leggi ancora nel bordo dello schermo.",
       "Un'antenna non zittita ruba secondi a intervalli: più spesso e più a fondo man mano che la parte si fa importante. Il contatore B, se ignorato oltre metà tempo, ne brucia venticinque in un colpo.",
+      "Dalla caratterista in su il timer può avere un secondo morsetto, CLOCK, con il filo del quarzo. È il cliché del taglio che peggiora tutto: aprirlo non ferma il conto, lo fa correre al doppio fino a fine scena. Il multimetro lo riconosce; il taccuino lo segna QUARZO.",
       "Le durate sono tarate su chi fa tutto come da copione: ogni guardia, ogni cifra trovata di persona, ogni filo misurato. In comparsa c'è tempo per imparare. In caratterista ne avanza a chi ha la mano sicura. In protagonista non ne avanza quasi.",
     ],
   },
@@ -49,7 +50,7 @@ export const ARTICLES: Article[] = [
     title: "Fili e gemelli",
     kicker: "Modulo",
     body: [
-      "Cinque ruoli, mai scritti sull'isolante: sicura (un tratto della linea INIBITORE → BAT −), trappola (segmento fra cella e innesco), esca (tutto ciò che non porta corrente utile), alimentazione (cella verso timer), senso (antenna verso cluster).",
+      "Sei ruoli, mai scritti sull'isolante: sicura (un tratto della linea INIBITORE → BAT −), trappola (segmento fra cella e innesco), esca (tutto ciò che non porta corrente utile), alimentazione (cella verso timer), senso (antenna verso cluster), quarzo (dal morsetto CLOCK del timer: tagliato, raddoppia la corsa del conto).",
       "I percorsi passano dai giunti. Due fili possono uscirne vestiti uguale: uno continua, l'altro è un ramo cieco. Una perla gialla sul filo conduce in un verso solo: se guarda dalla parte sbagliata, quel percorso è finto e i suoi tratti sono esche.",
       "Dalla caratterista in su un filo può avere l'anima interrotta sotto l'isolante. A vista è intero; il multimetro, sui suoi due capi, legge aperto. Un percorso che passa da lì non esiste: conta come esca, anche quando sembra una trappola o un secondo ramo della linea.",
       "La linea non si lascia aprire finché il relè del codice è chiuso in parallelo, il condensatore è ancora sulla cella, o la copertura è giù. Il primo taglio forzato non interrompe la linea e costa secondi. Il secondo chiude la scena.",
