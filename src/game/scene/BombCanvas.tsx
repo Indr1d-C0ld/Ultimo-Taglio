@@ -6,7 +6,7 @@ import { ToneMappingMode } from "postprocessing";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { fx, useGame } from "../store";
-import { Device, inspectPoint } from "./Device";
+import { Device, inspectPoint, roomDrop } from "./Device";
 import { Finale } from "./Finale";
 import { HandSurface, ToolInHand } from "./Hand";
 
@@ -317,8 +317,9 @@ function Controls() {
 }
 
 function Room() {
+  const drop = useGame((s) => (s.bomb ? roomDrop(s.bomb.archetype) : 0));
   return (
-    <group>
+    <group position={[0, drop, 0]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.46, 0]} receiveShadow>
         <circleGeometry args={[7, 48]} />
         <meshStandardMaterial color="#161210" roughness={1} />

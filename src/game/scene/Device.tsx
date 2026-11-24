@@ -20,7 +20,7 @@ import {
 } from "./Modules";
 import { touch } from "./Hand";
 import { paint } from "./paint";
-import { CASE, ValigettaModel } from "./Valigetta";
+import { SHELLS, ShellModel, type ShellFit } from "./Shell";
 
 function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | null {
   for (const mod of bomb.modules) {
@@ -35,8 +35,9 @@ function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | nul
   }
   const chassis = bomb.chassisTerminals.find((t) => t.id === id);
   if (!chassis) return null;
-  if (bomb.archetype === "valigetta") {
-    const post = id === "sw-a" ? SW_POST.a : SW_POST.b;
+  const shell = SHELLS[bomb.archetype];
+  if (shell) {
+    const post = swPost(shell, id === "sw-a" ? -1 : 1);
     return new THREE.Vector3(post[0], post[1], post[2] + 0.04);
   }
   return new THREE.Vector3(chassis.local[0], chassis.local[1], chassis.local[2]);
@@ -60,13 +61,37 @@ export function Device() {
 
 /** Height of the bench group over the room origin. The table top sits at −0.255. */
 const TABLE_Y = -0.255;
-export const BENCH_Y = { valigetta: TABLE_Y - CASE.bottomY, cilindro: -0.08, console: -0.08 } as const;
+/** A generated shell rests its underside on the table; the old boxes keep the height they were drawn for. */
+export function benchY(archetype: Bomb["archetype"]): number {
+  const shell = SHELLS[archetype];
+  if (!shell) return -0.08;
+  const resting = TABLE_Y - shell.bottomY;
+  // A tall shell would lift the deck out of the camera's reach: keep the deck where it
+  // always is and let the room come down to meet the shell instead (see roomDrop).
+  return resting > 0.15 ? -0.08 : resting;
+}
+
+/** How far the room sits below its usual height so that the table still touches the shell. */
+export function roomDrop(archetype: Bomb["archetype"]): number {
+  const shell = SHELLS[archetype];
+  return shell ? benchY(archetype) + shell.bottomY - TABLE_Y : 0;
+}
+
+/** Microswitch posts on a shell: outside, on the front band, between plate and catches. */
+function swPost(shell: ShellFit, side: 1 | -1): Vec3 {
+  return [side * shell.postX, shell.wallMidY, shell.frontZ + 0.04];
+}
 
 /** Where a module sits on the bench, in bench space. */
 function moduleHome(bomb: Bomb, mod: Module, exploded: boolean): Vec3 {
-  const onCase = bomb.archetype === "valigetta" && mod.kind === "plate";
-  // On the case the plate is riveted upright to the front wall instead of lying on the bench.
-  const home: Vec3 = onCase ? [0, CASE.wallMidY, CASE.frontZ - 0.018] : mod.position;
+  const shell = SHELLS[bomb.archetype];
+  // On a shell the plate is either riveted upright to the front band or lies on the table before it.
+  const home: Vec3 =
+    mod.kind !== "plate" || !shell
+      ? mod.position
+      : shell.plate === "front"
+        ? [0, shell.wallMidY - shell.plateDrop, shell.frontZ - 0.018]
+        : [0, shell.bottomY, shell.frontZ + 0.24];
   const extra = exploded ? mod.explode : [0, 0, 0];
   return [home[0] + extra[0]!, home[1] + extra[1]!, home[2] + extra[2]!];
 }
@@ -76,7 +101,7 @@ export function inspectPoint(bomb: Bomb, id: string, exploded: boolean): THREE.V
   const mod = bomb.modules.find((m) => m.id === id);
   if (!mod) return null;
   const at = moduleHome(bomb, mod, exploded);
-  return new THREE.Vector3(at[0], at[1] + BENCH_Y[bomb.archetype] + 0.08, at[2]);
+  return new THREE.Vector3(at[0], at[1] + benchY(bomb.archetype) + 0.08, at[2]);
 }
 
 /** Pointer handlers that report what is under the cursor and show a hand over it. */
@@ -109,7 +134,7 @@ function Attitude({ children }: { children: React.ReactNode }) {
     ref.current.rotation.z += (a.z - ref.current.rotation.z) * Math.min(1, d * 8);
   });
   return (
-    <group ref={ref} position={[0, BENCH_Y[archetype], 0]}>
+    <group ref={ref} position={[0, benchY(archetype), 0]}>
       {children}
     </group>
   );
@@ -120,22 +145,23 @@ function Chassis() {
   const open = useGame((s) => s.lidOpen);
   const xray = useGame((s) => s.xray);
   const dispatch = useGame((s) => s.dispatch);
-  if (archetype === "valigetta") {
+  const fitted = SHELLS[archetype];
+  if (fitted) {
     const latch = (e: { stopPropagation: () => void }) => {
       e.stopPropagation();
       dispatch({ type: "pointer-latch" });
     };
     return (
       <group>
-        <ValigettaModel open={open} xray={xray} />
+        <ShellModel fit={fitted} open={open} xray={xray} />
         {[-1, 1].map((side) => (
-          <mesh key={side} position={[side * CASE.latchX, CASE.wallMidY + 0.06, CASE.frontZ + 0.03]} onClick={latch}>
+          <mesh key={side} position={[side * fitted.latchX, fitted.wallMidY + 0.06, fitted.frontZ + 0.03]} onClick={latch}>
             <boxGeometry args={[0.22, 0.3, 0.12]} />
             <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
           </mesh>
         ))}
-        <Post id="sw-a" position={SW_POST.a} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
-        <Post id="sw-b" position={SW_POST.b} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
+        <Post id="sw-a" position={swPost(fitted, -1)} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
+        <Post id="sw-b" position={swPost(fitted, 1)} rotation={[Math.PI / 2, 0, 0]} owner="chassis" />
       </group>
     );
   }
@@ -229,12 +255,6 @@ function Chassis() {
   );
 }
 
-/** Microswitch posts on the case: outside, on the front wall, between plate and catches. */
-const SW_POST = {
-  a: [-0.545, CASE.wallMidY, CASE.frontZ + 0.04] as Vec3,
-  b: [0.545, CASE.wallMidY, CASE.frontZ + 0.04] as Vec3,
-};
-
 function Cover({ open, children }: { open: boolean; children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   const anim = useRef(0);
@@ -256,7 +276,7 @@ function ModuleMesh({ mod }: { mod: Module }) {
   const selected = useGame((s) => s.selectedId === mod.id);
   const dispatch = useGame((s) => s.dispatch);
   if (!bomb) return null;
-  const upright = bomb.archetype === "valigetta" && mod.kind === "plate";
+  const upright = mod.kind === "plate" && SHELLS[bomb.archetype]?.plate === "front";
   return (
     <group
       position={moduleHome(bomb, mod, exploded)}
@@ -474,21 +494,25 @@ function DigitReadout({ text, y, z }: { text: string; y: number; z: number }) {
   );
 }
 
-/** Where the UV digit is painted, per shell: right wall, left wall, back wall, floor by the catches. */
-const UV_PLACES: Record<"case" | "box", { position: Vec3; rotation: Vec3 }[]> = {
-  case: [
-    { position: [CASE.sideX + 0.012, CASE.wallMidY, -0.2], rotation: [0, Math.PI / 2, 0] },
-    { position: [-CASE.sideX - 0.012, CASE.wallMidY, 0.2], rotation: [0, -Math.PI / 2, 0] },
-    { position: [0.62, CASE.wallMidY, CASE.backZ - 0.012], rotation: [0, Math.PI, 0] },
-    { position: [0.36, 0.034, 0.7], rotation: [-Math.PI / 2, 0, 0] },
-  ],
-  box: [
-    { position: [1.072, -0.08, -0.2], rotation: [0, Math.PI / 2, 0] },
-    { position: [-1.072, -0.08, 0.2], rotation: [0, -Math.PI / 2, 0] },
-    { position: [0.62, -0.08, -0.922], rotation: [0, Math.PI, 0] },
-    { position: [0.5, 0.04, 0.66], rotation: [-Math.PI / 2, 0, 0] },
-  ],
-};
+/** Where the UV digit is painted: right wall, left wall, back wall, deck by the catches. */
+function uvPlaces(shell: ShellFit | undefined): { position: Vec3; rotation: Vec3 }[] {
+  if (!shell) {
+    return [
+      { position: [1.072, -0.08, -0.2], rotation: [0, Math.PI / 2, 0] },
+      { position: [-1.072, -0.08, 0.2], rotation: [0, -Math.PI / 2, 0] },
+      { position: [0.62, -0.08, -0.922], rotation: [0, Math.PI, 0] },
+      { position: [0.5, 0.04, 0.66], rotation: [-Math.PI / 2, 0, 0] },
+    ];
+  }
+  const deck = { position: [0.36, 0.034, 0.7] as Vec3, rotation: [-Math.PI / 2, 0, 0] as Vec3 };
+  if (shell.uv) return [...shell.uv, deck];
+  return [
+    { position: [shell.sideX + 0.012, shell.wallMidY, -0.2], rotation: [0, Math.PI / 2, 0] },
+    { position: [-shell.sideX - 0.012, shell.wallMidY, 0.2], rotation: [0, -Math.PI / 2, 0] },
+    { position: [0.62, shell.wallMidY, shell.backZ - 0.012], rotation: [0, Math.PI, 0] },
+    deck,
+  ];
+}
 
 /** Invisible in stage light. Under the UV lamp it glows, on whichever face this scene put it. */
 function UvMark() {
@@ -512,9 +536,9 @@ function UvMark() {
       }),
     [digit],
   );
-  const onCase = useGame((s) => s.bomb?.archetype === "valigetta");
+  const archetype = useGame((s) => s.bomb?.archetype ?? "valigetta");
   if (!uv || phase === "boot") return null;
-  const places = UV_PLACES[onCase ? "case" : "box"];
+  const places = uvPlaces(SHELLS[archetype]);
   const place = places[spot % places.length]!;
   return (
     <mesh position={place.position} rotation={place.rotation}>
@@ -738,8 +762,8 @@ function Jumper({ bomb, a, b, exploded }: { bomb: Bomb; a: string; b: string; ex
 
 function Hero() {
   return (
-    <group position={[0, BENCH_Y.valigetta, 0]}>
-      <ValigettaModel open={false} xray={false} />
+    <group position={[0, benchY("valigetta"), 0]}>
+      <ShellModel fit={SHELLS.valigetta!} open={false} xray={false} />
     </group>
   );
 }
