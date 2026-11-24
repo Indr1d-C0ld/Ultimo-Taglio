@@ -78,11 +78,14 @@
   50% { opacity: 0.35; }
 }
 
+/* The flash must end transparent and stay there, or it paints over the bench. */
 .flash-boom {
+  opacity: 0;
   animation: flash-boom 700ms ease-out;
 }
 
 .flash-safe {
+  opacity: 0;
   animation: flash-safe 800ms ease-out;
 }
 

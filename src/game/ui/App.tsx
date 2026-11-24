@@ -14,6 +14,7 @@ import {
   Stethoscope,
   Sun,
   Tag,
+  Trophy,
   Unplug,
   Volume2,
   VolumeX,
@@ -30,7 +31,9 @@ import { KIT, KIT_GROUPS, fitLine, kitItem } from "../kit";
 import { findWire, formatClock, stages } from "../logic";
 import { colorHex, colorName, terminalLabel } from "../palette";
 import { randomSeed } from "../rng";
-import { loadSave, markRead, type Score } from "../save";
+import { activeProfile, markRead } from "../save";
+import { AWARDS, GRADES, dailySeed } from "../stats";
+import { Records } from "./Records";
 import { emitView, useGame } from "../store";
 import type { Difficulty, Mode, ModuleKind, Tool } from "../types";
 
@@ -74,10 +77,11 @@ export function App() {
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
       if (event.key === "Escape") {
-        st.toggleArchive();
+        if (st.panel) st.closePanel();
+        else st.toggleArchive();
         return;
       }
-      if (st.archive || st.phase !== "play") return;
+      if (st.archive || st.panel || st.phase !== "play") return;
       if (event.key === "e" || event.key === "E") st.dispatch({ type: "toggle", key: "exploded" });
       if (event.key === "x" || event.key === "X") st.dispatch({ type: "toggle", key: "xray" });
       if (event.key === "u" || event.key === "U") st.dispatch({ type: "toggle", key: "uv" });
@@ -127,6 +131,7 @@ export function App() {
       <MobileBar />
       <BagSheet />
       {archive && <Archive />}
+      <Records />
       <div className="grain" aria-hidden />
     </div>
   );
@@ -179,6 +184,7 @@ function Header() {
   const sound = useGame((s) => s.sound);
   const toggleSound = useGame((s) => s.toggleSound);
   const toggleArchive = useGame((s) => s.toggleArchive);
+  const openPanel = useGame((s) => s.openPanel);
   const progress = useGame((s) =>
     s.bomb
       ? `${s.phase}|${s.pressureShunted}|${s.lidOpen}|${s.tiltLocked}|${s.capDumped}|${s.codeUnlocked}|${s.dialMatched}`
@@ -216,6 +222,9 @@ function Header() {
         </div>
         <IconButton label={sound ? "Suono acceso" : "Suono spento"} onClick={toggleSound}>
           {sound ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+        </IconButton>
+        <IconButton label="Registro e statistiche" onClick={() => openPanel(phase === "boot" ? "carriera" : "partita")}>
+          <Trophy className="size-4" />
         </IconButton>
         <IconButton label="Archivio di scena" onClick={toggleArchive}>
           <BookOpen className="size-4" />
@@ -464,6 +473,11 @@ function Dossier() {
       <button type="button" onClick={() => dispatch({ type: "hint" })} className="mt-3 h-11 w-full rounded-sm border border-line text-sm text-lcd">
         Suggerimento di scena
       </button>
+      {phase === "play" && (
+        <button type="button" onClick={() => dispatch({ type: "abort" })} className="mt-2 h-10 w-full text-xs text-faint">
+          Abbandona la scena
+        </button>
+      )}
     </aside>
   );
 }
@@ -678,11 +692,12 @@ function Boot() {
   const [seed, setSeed] = useState("CIAK01");
   const [difficulty, setDifficulty] = useState<Difficulty>("caratterista");
   const [mode, setMode] = useState<Mode>("ripresa");
-  const [scores, setScores] = useState<Score[]>([]);
+  const openPanel = useGame((s) => s.openPanel);
+  const performer = useGame((s) => activeProfile(s.save).name);
+  const daily = dailySeed(new Date());
 
   useEffect(() => {
     setSeed(randomSeed());
-    setScores(loadSave().best);
   }, []);
 
   return (
@@ -692,6 +707,14 @@ function Boot() {
       <p className="mt-2 text-sm text-muted">
         Un ordigno da film, diverso a ogni seme. Si orbita, si apre, si misura, si taglia. Nessun colore è una regola.
       </p>
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-sm border border-line px-3 py-2">
+        <p className="min-w-0 truncate text-sm text-muted">
+          Interprete: <span className="text-fg">{performer}</span>
+        </p>
+        <button type="button" onClick={() => openPanel("camerino")} className="h-9 shrink-0 rounded-sm border border-line px-3 text-xs text-lcd">
+          Cambia interprete
+        </button>
+      </div>
       <div className="mt-4 grid gap-2">
         {(Object.keys(DIFFICULTY_COPY) as Difficulty[]).map((id) => {
           const copy = DIFFICULTY_COPY[id]!;
@@ -750,25 +773,22 @@ function Boot() {
       >
         AZIONE
       </button>
-      <button type="button" onClick={toggleArchive} className="mt-2 h-11 w-full text-sm text-lcd">
-        Apri l'archivio di scena
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "start", seed: daily, difficulty: "caratterista", mode: "ripresa" })}
+        className="mt-2 h-11 w-full rounded-sm border border-line text-sm text-fg"
+      >
+        Scena del giorno · {daily}
       </button>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={() => openPanel("carriera")} className="h-11 flex-1 text-sm text-lcd">
+          Registro e statistiche
+        </button>
+        <button type="button" onClick={toggleArchive} className="h-11 flex-1 text-sm text-lcd">
+          Archivio di scena
+        </button>
+      </div>
       <p className="mt-3 text-xs text-faint">{DISCLAIMER}</p>
-      {scores.length > 0 && (
-        <div className="mt-3 border-t border-line pt-3">
-          <p className="text-xs tracking-widest text-muted">BACHECA</p>
-          <ul className="mt-1 space-y-1 text-sm text-fg">
-            {scores.slice(0, 3).map((score) => (
-              <li key={score.at} className="flex justify-between gap-2">
-                <span>
-                  {score.seed} · {DIFFICULTY_COPY[score.difficulty]?.label}
-                </span>
-                <span className="text-lcd">{formatClock(score.left)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </section>
   );
 }
@@ -781,11 +801,41 @@ function EndCard() {
   const mode = useGame((s) => s.mode);
   const seconds = useGame((s) => s.secondsLeft);
   const dispatch = useGame((s) => s.dispatch);
+  const run = useGame((s) => s.lastRun);
+  const newAwards = useGame((s) => s.newAwards);
+  const openPanel = useGame((s) => s.openPanel);
   const ok = phase === "safe";
   return (
     <section className="pointer-events-auto w-full max-w-md rounded-md border border-line bg-bg-raised p-4">
       <p className="font-display text-3xl tracking-wide text-fg">{ok ? "DISINNESCATO" : "FINE RULLO"}</p>
       <p className="mt-2 text-sm text-muted">{reason}</p>
+      {run && ok && (
+        <div className="mt-3 flex items-end justify-between gap-3 border-y border-line py-2">
+          <div>
+            <p className="text-[10px] tracking-[0.18em] text-muted">VOTO DELLA CRITICA</p>
+            <p className="font-display text-xl tracking-wide text-ok">{GRADES[run.grade].label}</p>
+          </div>
+          {mode === "ripresa" && (
+            <div className="text-right">
+              <p className="text-[10px] tracking-[0.18em] text-muted">PUNTEGGIO</p>
+              <p className="lcd-readout text-2xl">{run.score.toLocaleString("it-IT")}</p>
+            </div>
+          )}
+        </div>
+      )}
+      {run && (
+        <p className="mt-2 text-xs text-muted">
+          {run.probes} misure · {run.hints} suggerimenti · {run.mistakes} errori · {run.lost} s persi in penalità
+        </p>
+      )}
+      {newAwards.map((id) => {
+        const award = AWARDS.find((a) => a.id === id);
+        return award ? (
+          <p key={id} className="mt-2 rounded-sm border border-ok px-2 py-1 text-sm text-ok">
+            Premio: {award.title}
+          </p>
+        ) : null;
+      })}
       <p className="mt-2 font-mono text-sm text-lcd">
         {seed} · {ok ? formatClock(seconds) : "00:00"} · {mode === "prova" ? "prova" : "ripresa"}
       </p>
@@ -805,9 +855,14 @@ function EndCard() {
           Nuova scena
         </button>
       </div>
-      <button type="button" className="mt-2 h-11 w-full text-sm text-muted" onClick={() => dispatch({ type: "abort" })}>
-        Torna in sala prova
-      </button>
+      <div className="mt-2 flex gap-2">
+        <button type="button" className="h-11 flex-1 text-sm text-lcd" onClick={() => openPanel("partita")}>
+          Titoli di coda
+        </button>
+        <button type="button" className="h-11 flex-1 text-sm text-muted" onClick={() => dispatch({ type: "abort" })}>
+          Torna in sala prova
+        </button>
+      </div>
     </section>
   );
 }

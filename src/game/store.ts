@@ -1,7 +1,17 @@
 import { create } from "zustand";
 import { beep, boom, setMuted, unlockAudio, win } from "./audio";
 import { initialState, reduce } from "./logic";
-import { recordWin } from "./save";
+import {
+  activeProfile,
+  addRun,
+  createProfile,
+  deleteProfile,
+  importProfile,
+  loadSave,
+  selectProfile,
+  type Save,
+} from "./save";
+import { earnedAwards, recordOf, type RunRecord } from "./stats";
 import type { Action, RunState } from "./types";
 
 export const fx = { shake: 0 };
@@ -11,6 +21,20 @@ interface UiState {
   sound: boolean;
   dossier: boolean;
   bag: boolean;
+  /** Mirror of what is in storage, so the screens re-render when it changes. */
+  save: Save;
+  lastRun: RunRecord | null;
+  /** Awards unlocked by the scene that just ended. */
+  newAwards: string[];
+  panel: Panel | null;
+  /** The run the scene sheet is showing; null means the latest. */
+  viewRun: RunRecord | null;
+  openPanel: (panel: Panel, run?: RunRecord) => void;
+  closePanel: () => void;
+  profileCreate: (name: string) => void;
+  profileSelect: (id: string) => void;
+  profileDelete: (id: string) => void;
+  profileImport: (code: string) => string | null;
   dispatch: (action: Action) => void;
   toggleArchive: () => void;
   toggleSound: () => void;
@@ -18,7 +42,19 @@ interface UiState {
   toggleBag: () => void;
 }
 
+export type Panel = "partita" | "carriera" | "fama" | "graduatoria" | "premi" | "camerino";
+
 export type GameStore = RunState & UiState;
+
+/** Files a finished scene in the active performer's register. */
+function file(state: RunState, outcome: "safe" | "boom" | "abort"): Partial<UiState> {
+  const run = recordOf(state, Date.now(), outcome);
+  if (!run) return {};
+  const before = new Set(earnedAwards(activeProfile(loadSave()).runs));
+  const save = addRun(run);
+  const newAwards = earnedAwards(activeProfile(save).runs).filter((id) => !before.has(id));
+  return { save, lastRun: run, newAwards };
+}
 
 function toRun(s: GameStore): RunState {
   return {
@@ -69,6 +105,8 @@ function toRun(s: GameStore): RunState {
     bridgeHot: s.bridgeHot,
     bridgeCause: s.bridgeCause,
     bridgeWarned: s.bridgeWarned,
+    endCause: s.endCause,
+    tally: s.tally,
   };
 }
 
@@ -96,16 +134,29 @@ export const useGame = create<GameStore>((set, get) => ({
         beep(next.secondsLeft <= 5 ? 1760 : next.secondsLeft <= 10 ? 1400 : 880);
       }
     }
-    if (prev.phase !== "safe" && next.phase === "safe" && next.mode === "ripresa" && next.bomb) {
-      recordWin({
-        seed: next.seed,
-        difficulty: next.difficulty,
-        left: next.secondsLeft,
-        hints: next.hintsUsed,
-      });
+    let filed: Partial<UiState> = {};
+    if (prev.phase === "play" && (next.phase === "safe" || next.phase === "boom")) {
+      filed = file(next, next.phase);
+    } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
+      filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, archive: false });
-    else set(next);
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, newAwards: [] });
+    else set({ ...next, ...filed });
+  },
+  save: loadSave(),
+  lastRun: null,
+  newAwards: [],
+  panel: null,
+  viewRun: null,
+  openPanel: (panel, run) => set({ panel, viewRun: run ?? null }),
+  closePanel: () => set({ panel: null, viewRun: null }),
+  profileCreate: (name) => set({ save: createProfile(name), lastRun: null, newAwards: [] }),
+  profileSelect: (id) => set({ save: selectProfile(id), lastRun: null, newAwards: [] }),
+  profileDelete: (id) => set({ save: deleteProfile(id), lastRun: null, newAwards: [] }),
+  profileImport: (code) => {
+    const { save, error } = importProfile(code);
+    set({ save });
+    return error ?? null;
   },
   toggleArchive: () => set({ archive: !get().archive }),
   toggleSound: () => {

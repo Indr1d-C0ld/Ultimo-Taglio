@@ -143,6 +143,35 @@ export interface RunState {
   bridgeHot: boolean;
   bridgeCause: "cap" | "code" | "other" | null;
   bridgeWarned: boolean;
+  /** Short machine tag for how the scene ended; the sentence is in endReason. */
+  endCause: EndCause | null;
+  tally: Tally;
+}
+
+export type EndCause =
+  | "disinnesco"
+  | "tempo"
+  | "trappola"
+  | "microswitch"
+  | "ponte"
+  | "ponticello"
+  | "grano"
+  | "forzatura"
+  | "condensatore"
+  | "antenna"
+  | "contatore"
+  | "altro";
+
+/** Counters kept during a scene, for the end card and the career register. */
+export interface Tally {
+  /** Seconds of real play, whether or not the countdown runs. */
+  elapsed: number;
+  probes: number;
+  wrongCodes: number;
+  decoyCuts: number;
+  lineCuts: number;
+  /** Elapsed second at which each stage was first completed. */
+  stageAt: Record<string, number>;
 }
 
 export type Action =

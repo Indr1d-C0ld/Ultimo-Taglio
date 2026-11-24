@@ -3,7 +3,7 @@ import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBri
 import { generateBomb } from "./generate";
 import { fitLine } from "./kit";
 import { colorName, terminalLabel } from "./palette";
-import type { Action, Bomb, Difficulty, LogLine, Mode, RunState, Wire } from "./types";
+import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, RunState, Wire } from "./types";
 
 const TILT_LIMIT = 0.32;
 const MAX_TICK = 0.5;
@@ -57,6 +57,8 @@ export function initialState(): RunState {
     bridgeHot: false,
     bridgeCause: null,
     bridgeWarned: false,
+    endCause: null,
+    tally: { elapsed: 0, probes: 0, wrongCodes: 0, decoyCuts: 0, lineCuts: 0, stageAt: {} },
   };
 }
 
@@ -71,7 +73,42 @@ function note(s: RunState, text: string): RunState {
 }
 
 function boom(s: RunState, reason: string): RunState {
-  return { ...say(s, reason, "bad"), phase: "boom", endReason: reason, listenLeft: 0 };
+  return { ...say(s, reason, "bad"), phase: "boom", endReason: reason, endCause: causeOf(reason), listenLeft: 0 };
+}
+
+const CAUSES: [RegExp, EndCause][] = [
+  [/tempo di scena è finito/i, "tempo"],
+  [/percorso dalla cella all'innesco/i, "trappola"],
+  [/microswitch/i, "microswitch"],
+  [/ping/i, "antenna"],
+  [/ponte di scena ha saturato/i, "ponte"],
+  [/ponticello ha chiuso/i, "ponticello"],
+  [/grano di scena/i, "grano"],
+  [/forzat/i, "forzatura"],
+  [/condensatore carico/i, "condensatore"],
+  [/contatore secondario/i, "contatore"],
+  [/taglio sul senso/i, "tempo"],
+];
+
+/** Files an ending sentence under a cause. Every sentence passed to boom() must match one. */
+export function causeOf(reason: string): EndCause {
+  return CAUSES.find(([pattern]) => pattern.test(reason))?.[1] ?? "altro";
+}
+
+function bump(s: RunState, key: "probes" | "wrongCodes" | "decoyCuts" | "lineCuts"): RunState {
+  return { ...s, tally: { ...s.tally, [key]: s.tally[key] + 1 } };
+}
+
+/** Stamps the moment a stage first reads as done. */
+function stamp(s: RunState): RunState {
+  if (!s.bomb || (s.phase !== "play" && s.phase !== "safe")) return s;
+  let stageAt = s.tally.stageAt;
+  for (const stage of stages(s)) {
+    if (stage.done && stageAt[stage.id] === undefined) {
+      stageAt = { ...stageAt, [stage.id]: Math.round(s.tally.elapsed * 10) / 10 };
+    }
+  }
+  return stageAt === s.tally.stageAt ? s : { ...s, tally: { ...s.tally, stageAt } };
 }
 
 function ownerOf(bomb: Bomb, terminalId: string): string {
@@ -154,6 +191,10 @@ function live(s: RunState): boolean {
 }
 
 export function reduce(state: RunState, action: Action): RunState {
+  return stamp(step(state, action));
+}
+
+function step(state: RunState, action: Action): RunState {
   switch (action.type) {
     case "abort":
       return { ...initialState(), difficulty: state.difficulty, mode: state.mode, seed: state.seed };
@@ -263,7 +304,8 @@ function tick(s: RunState, dt: number): RunState {
   // clamp must sit above that or the countdown runs slow. It only guards
   // against a stalled tab handing over one huge delta.
   const step = Math.min(Math.max(dt, 0), MAX_TICK);
-  let n = s;
+  let n: RunState = { ...s, tally: { ...s.tally, elapsed: s.tally.elapsed + step } };
+  s = n;
   if (s.listenLeft > 0) {
     const left = s.listenLeft - step;
     if (left <= 0) n = finishListen(s);
@@ -392,7 +434,7 @@ function probe(s: RunState, id: string): RunState {
   if (!s.probeA) return say({ ...s, probeA: id }, `Sonda A su ${terminalLabel(id)}.`, "info");
   if (s.probeA === id) return say({ ...s, probeA: null }, "Sonda ritirata.", "info");
   const reading = describePair(s, s.probeA, id);
-  let n: RunState = { ...s, probeA: null };
+  let n: RunState = bump({ ...s, probeA: null }, "probes");
   n = say(n, `${terminalLabel(s.probeA)} ↔ ${terminalLabel(id)} — ${reading.text}`, reading.wireId ? "good" : "info");
   n = note(n, `${terminalLabel(s.probeA)} ↔ ${terminalLabel(id)}: ${reading.text}`);
   if (reading.wireId && !n.knownWireIds.includes(reading.wireId)) {
@@ -458,7 +500,7 @@ function onWire(s: RunState, id: string): RunState {
     return boom(n, `Il ${colorName(wire.color).toLowerCase()} stava sul percorso dalla cella all'innesco. Il colore non c'entra, il verso sì.`);
   }
   if (wire.role === "esca") {
-    n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) };
+    n = bump({ ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) }, "decoyCuts");
     return say(n, `${colorName(wire.color)} tagliato. ${wireSeat(bomb, viewOf(n), id)}`, "info");
   }
   if (wire.role === "senso") {
@@ -517,7 +559,7 @@ function onWire(s: RunState, id: string): RunState {
     );
   }
 
-  n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) };
+  n = bump({ ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) }, "lineCuts");
   if (lineClosed(bomb, viewOf(n))) {
     return say(
       n,
@@ -525,7 +567,7 @@ function onWire(s: RunState, id: string): RunState {
       "warn",
     );
   }
-  n = { ...n, phase: "safe", bridge: 0, bridgeHot: false, bridgeCause: null };
+  n = { ...n, phase: "safe", endCause: "disinnesco", bridge: 0, bridgeHot: false, bridgeCause: null };
   const left = n.secondsLeft;
   return {
     ...say(n, "Inibitore aperto. L'innesco di scena resta muto. Il timer si ferma.", "good"),
@@ -582,7 +624,7 @@ function onKeypad(s: RunState, key: string): RunState {
     }
     const left = s.mode === "ripresa" ? Math.max(1, s.secondsLeft - 10) : s.secondsLeft;
     return say(
-      { ...s, keypad: "", mistakes: s.mistakes + 1, secondsLeft: left },
+      bump({ ...s, keypad: "", mistakes: s.mistakes + 1, secondsLeft: left }, "wrongCodes"),
       "Codice rifiutato. Il copione non perdona a orecchio.",
       "warn",
     );
