@@ -40,6 +40,8 @@ export interface RunRecord {
   displayDead: boolean;
   dialMatched: boolean | null;
   tiltLocked: boolean | null;
+  /** The hidden second countdown: cut before it woke, woken, or never found. Null (or missing, in old records) when not in the scene. */
+  twin?: "prevenuto" | "partito" | "intatto" | null;
   stageAt: Record<string, number>;
 }
 
@@ -53,6 +55,7 @@ export const GRADES: Record<Grade, { label: string; line: string }> = {
 
 export const CAUSE_LABEL: Record<EndCause, string> = {
   disinnesco: "Disinnesco",
+  gemello: "Secondo timer",
   tempo: "Tempo scaduto",
   trappola: "Filo trappola",
   microswitch: "Microswitch di copertura",
@@ -153,6 +156,14 @@ export function recordOf(s: RunState, at: number, outcome: Outcome): RunRecord |
     displayDead: s.displayDead,
     dialMatched: bomb.gates.dial ? s.dialMatched : null,
     tiltLocked: bomb.gates.tilt ? s.tiltLocked : null,
+    twin:
+      bomb.twin === null
+        ? null
+        : s.twinLeft !== null
+          ? ("partito" as const)
+          : s.cutIds.some((id) => bomb.wires.find((w) => w.id === id)?.role === "gemello")
+            ? ("prevenuto" as const)
+            : ("intatto" as const),
     stageAt: s.tally.stageAt,
   };
   const score = Math.max(0, scoreSheet(base).reduce((sum, l) => sum + l.points, 0));
@@ -287,6 +298,7 @@ export const AWARDS: Award[] = [
   { id: "protagonista", title: "Nome in cartellone", text: "Disinnesca una scena da protagonista.", earned: (_, c) => c.byDifficulty.protagonista.won >= 1 },
   { id: "metodo", title: "Metodo Stanislavskij", text: "Vinci dopo aver misurato ogni singolo filo.", earned: (r) => won(r).some((x) => x.wiresRead >= x.wires) },
   { id: "doppio", title: "Doppio taglio", text: "Apri una linea che aveva due rami in parallelo.", earned: (_, c) => c.doubleCuts >= 1 },
+  { id: "coda", title: "Colpo di coda", text: "Ferma il secondo timer dopo che si è svegliato.", earned: (r) => won(r).some((x) => x.twin === "partito") },
   { id: "buio", title: "Al buio", text: "Disinnesca con il display spento.", earned: (r) => won(r).some((x) => x.displayDead) },
   { id: "carrozzerie", title: "Tris di carrozzerie", text: "Vinci con valigetta, cilindro e console.", earned: (_, c) => Object.values(c.byArchetype).every((s) => s.won >= 1) },
   { id: "serie", title: "Cinque ciak di fila", text: "Cinque disinneschi consecutivi in ripresa.", earned: (_, c) => c.bestStreak >= 5 },

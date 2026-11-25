@@ -86,7 +86,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
     receiver: difficulty === "comparsa" ? rng() > 0.45 : true,
   };
 
-  const wires = withQuartz(makeWires(difficulty, rng), seed, difficulty);
+  const wires = withTwin(withQuartz(makeWires(difficulty, rng), seed, difficulty), seed, difficulty);
   const d0 = 1 + Math.floor(rng() * 9);
   const d1 = 1 + Math.floor(rng() * 9);
   const d2 = 1 + Math.floor(rng() * 9);
@@ -133,6 +133,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
     ],
     uvDigit: String(d0),
     uvSpot,
+    twin: wires.some((w) => w.role === "gemello") ? TWIN[difficulty].seconds : null,
     ledBlink: d1,
     plateLines,
   };
@@ -277,6 +278,36 @@ function withQuartz(wires: Wire[], seed: string, diff: Difficulty): Wire[] {
   return [...wires.slice(0, at), quartz, ...wires.slice(at)].map((w, i) => ({ ...w, id: `w${i}` }));
 }
 
+/** The hidden second countdown: how often a scene has one, and how long it gives once it wakes. */
+export const TWIN: Record<Difficulty, { chance: number; seconds: number }> = {
+  comparsa: { chance: 0, seconds: 0 },
+  caratterista: { chance: 0.35, seconds: 20 },
+  protagonista: { chance: 0.6, seconds: 14 },
+};
+
+/**
+ * Adds the wire that feeds the twin: from the detonator's third post, marked only TEST, to a
+ * bus end of its own. It is on neither net, so the simulator ignores it; what it does is in
+ * the logic. Like the quartz it draws from its own stream and leaves the other wiring alone.
+ */
+function withTwin(wires: Wire[], seed: string, diff: Difficulty): Wire[] {
+  const rng = mulberry32(hashString(`${seed}|${diff}|gemello`));
+  if (rng() >= TWIN[diff].chance) return wires;
+  const taken = wires.flatMap((w) => [w.a, w.b]).filter((e) => e.startsWith("h-")).map((e) => Number(e.slice(4)));
+  const free = taken.length ? Math.max(...taken) + 1 : 0;
+  const twin: Wire = {
+    id: "",
+    color: pick(rng, Object.keys(WIRE_COLORS) as WireColor[]),
+    role: "gemello",
+    a: "det-aux",
+    b: `h-r-${free}`,
+    diode: null,
+    open: false,
+  };
+  const at = Math.floor(rng() * (wires.length + 1));
+  return [...wires.slice(0, at), twin, ...wires.slice(at)].map((w, i) => ({ ...w, id: `w${i}` }));
+}
+
 function makeWires(diff: Difficulty, rng: Rng): Wire[] {
   const drafts = shuffle(relabel(draftWires(diff, rng), rng), rng);
   const bare: Wire[] = drafts.map((d, i) => ({
@@ -330,6 +361,7 @@ function buildModules(gates: Gates, wires: Wire[]): Module[] {
     mod("detonator", "Innesco di scena", [
       term("det-in", [0.13, 0.06, 0.105]),
       term("det-inhibit", [-0.13, 0.06, 0.105]),
+      ...(wires.some((w) => w.role === "gemello") ? [term("det-aux", [0, 0.06, 0.105])] : []),
     ]),
     mod("leds", "Cluster lampeggi", [term("led-in", [0.285, 0.1, 0.062])]),
     mod("keypad", "Tastierino di scena", []),

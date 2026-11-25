@@ -55,7 +55,7 @@ function win(seed: string, difficulty: Difficulty, mode: Mode = "ripresa", secon
   for (const key of bomb.code) act({ type: "keypad", key });
   act({ type: "keypad", key: "OK" });
   act({ type: "tool", tool: "tronchese" });
-  for (const w of bomb.wires.filter((x) => x.role === "sicura")) {
+  for (const w of bomb.wires.filter((x) => x.role === "sicura" || x.role === "gemello").sort((a, b) => Number(b.role === "gemello") - Number(a.role === "gemello"))) {
     if (s.phase === "play") act({ type: "pointer-wire", id: w.id });
   }
   return s;

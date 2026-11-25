@@ -143,6 +143,7 @@ function toRun(s: GameStore): RunState {
     endCause: s.endCause,
     tally: s.tally,
     rush: s.rush,
+    twinLeft: s.twinLeft,
     mods: s.mods,
     campaign: s.campaign,
   };
@@ -166,7 +167,8 @@ export const useGame = create<GameStore>((set, get) => ({
       stopScore();
     } else if (action.type === "tick" && next.phase === "play" && next.bomb) {
       const clock = next.mode === "ripresa" ? 1 - next.secondsLeft / next.bomb.seconds : 0.2;
-      setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0) + (next.rush ? 0.25 : 0));
+      if (next.twinLeft !== null) setTension(1);
+      else setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0) + (next.rush ? 0.25 : 0));
     }
     if (prev.phase === "play" && next.phase === "safe") fx.shake = 0.06;
     if (prev.sound) {
@@ -175,6 +177,8 @@ export const useGame = create<GameStore>((set, get) => ({
       if (next.jumpers.length > prev.jumpers.length) clamp();
       if (prev.phase === "play" && next.phase === "boom") boom();
       else if (prev.phase === "play" && next.phase === "safe") win();
+      else if (next.phase === "play" && next.twinLeft !== null && prev.twinLeft !== null && next.twinLeft < prev.twinLeft) beep(1760);
+      else if (prev.twinLeft === null && next.twinLeft !== null) beep(220);
       else if (
         next.phase === "play" &&
         next.mode === "ripresa" &&

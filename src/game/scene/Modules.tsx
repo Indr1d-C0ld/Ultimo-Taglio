@@ -62,12 +62,14 @@ export function TimerModule({ selected }: { selected: boolean }) {
   const dead = useGame((s) => s.displayDead);
   const phase = useGame((s) => s.phase);
   const mode = useGame((s) => s.mode);
+  // While the twin counts, this display sits frozen and green: the lie of the false ending.
+  const frozen = useGame((s) => s.twinLeft !== null);
   const { canvas, tex } = useMemo(() => createLcd(), []);
   useEffect(() => {
-    const tone = dead ? "dead" : phase === "safe" ? "safe" : mode === "prova" ? "idle" : "arm";
+    const tone = dead ? "dead" : phase === "safe" || frozen ? "safe" : mode === "prova" ? "idle" : "arm";
     drawLcd(canvas, phase === "boot" ? "8888" : formatClock(seconds).replace(":", ""), tone);
     tex.needsUpdate = true;
-  }, [canvas, tex, seconds, dead, phase, mode]);
+  }, [canvas, tex, seconds, dead, phase, mode, frozen]);
   useEffect(() => () => tex.dispose(), [tex]);
 
   useFrame(({ clock }) => {

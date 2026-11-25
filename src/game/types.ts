@@ -17,7 +17,7 @@ export type Tool =
   | "maneggio"
   | "uv";
 
-export type WireRole = "sicura" | "trappola" | "esca" | "alimentazione" | "senso" | "quarzo";
+export type WireRole = "sicura" | "trappola" | "esca" | "alimentazione" | "senso" | "quarzo" | "gemello";
 
 export type ModuleKind =
   | "timer"
@@ -86,6 +86,8 @@ export interface Bomb {
   uvDigit: string;
   /** Which face of the shell carries the UV digit; the scene picks the exact place. */
   uvSpot: number;
+  /** Length of the hidden second countdown under the detonator; null when the scene has none. */
+  twin: number | null;
   ledBlink: number;
   plateLines: string[];
 }
@@ -151,6 +153,8 @@ export interface RunState {
   tally: Tally;
   /** The quartz wire was cut: the countdown runs at double speed for the rest of the scene. */
   rush: boolean;
+  /** Seconds left on the hidden second countdown; null until opening the line wakes it. */
+  twinLeft: number | null;
   /** Scene rules in force, set by the campaign. Free scenes have none. */
   mods: Modifier[];
   /** Id of the campaign scene being shot, or null for a free scene. */
@@ -171,6 +175,7 @@ export type Modifier =
 
 export type EndCause =
   | "disinnesco"
+  | "gemello"
   | "tempo"
   | "trappola"
   | "microswitch"

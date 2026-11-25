@@ -24,6 +24,7 @@ export function colorHex(id: string): string {
 export const TERMINAL_LABELS: Record<string, string> = {
   "det-in": "INNESCO",
   "det-inhibit": "INIBITORE",
+  "det-aux": "TEST",
   "bat-pos": "BAT +",
   "bat-neg": "BAT −",
   "cap-hot": "COND +",

@@ -33,7 +33,7 @@ function finish(box: ReturnType<typeof shoot>) {
   for (const key of bomb.code) box.act({ type: "keypad", key });
   box.act({ type: "keypad", key: "OK" });
   box.act({ type: "tool", tool: "tronchese" });
-  for (const w of bomb.wires.filter((x) => x.role === "sicura")) {
+  for (const w of bomb.wires.filter((x) => x.role === "sicura" || x.role === "gemello").sort((a, b) => Number(b.role === "gemello") - Number(a.role === "gemello"))) {
     if (box.s.phase === "play") box.act({ type: "pointer-wire", id: w.id });
   }
 }

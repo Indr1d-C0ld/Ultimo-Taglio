@@ -203,7 +203,8 @@ function Header() {
       : "",
   );
   const list = progress ? stages(useGame.getState()) : [];
-  const urgent = phase === "play" && mode === "ripresa" && seconds <= 15;
+  const twin = useGame((s) => (s.phase === "play" ? s.twinLeft : null));
+  const urgent = phase === "play" && mode === "ripresa" && (seconds <= 15 || twin !== null);
 
   return (
     <header className="z-20 flex shrink-0 items-center gap-3 border-b border-line bg-bg-raised px-3 py-2 md:px-4">
@@ -225,8 +226,9 @@ function Header() {
           </div>
         )}
         <div className={`lcd-readout text-2xl md:text-4xl ${urgent ? "lcd-hot" : ""}`}>
-          {(phase === "play" && !dead) || phase === "safe" || phase === "boom" ? formatClock(seconds) : "––:––"}
+          {twin !== null ? formatClock(twin) : (phase === "play" && !dead) || phase === "safe" || phase === "boom" ? formatClock(seconds) : "––:––"}
         </div>
+        {twin !== null && <p className="text-xs tracking-widest text-accent">GEMELLO</p>}
         <PingReadout />
         <div className="hidden text-xs text-muted sm:block">
           <p>{mode === "prova" ? "PROVA" : "RIPRESA"}</p>

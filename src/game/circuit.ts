@@ -122,7 +122,7 @@ function directWire(bomb: Bomb, view: NetView, a: string, b: string): Wire | und
   );
 }
 
-export type WireClass = "trappola" | "linea" | "timer" | "cluster" | "quarzo" | "cieco" | "morto" | "rotto";
+export type WireClass = "trappola" | "linea" | "timer" | "cluster" | "quarzo" | "gemello" | "cieco" | "morto" | "rotto";
 
 /** What the meter makes of a wire, as a tag. The sentence for the same reading is wireSeat(). */
 export function wireClass(bomb: Bomb, view: NetView, wireId: string): WireClass | null {
@@ -130,6 +130,7 @@ export function wireClass(bomb: Bomb, view: NetView, wireId: string): WireClass 
   if (!wire) return null;
   if (wire.open) return "rotto";
   if (wire.a === "timer-clk" || wire.b === "timer-clk") return "quarzo";
+  if (wire.a === "det-aux" || wire.b === "det-aux") return "gemello";
   const present: NetView = { ...view, cutIds: view.cutIds.filter((id) => id !== wireId) };
   const edges = netEdges(bomb, present);
   const hard = hardEdges(bomb, present);
@@ -150,6 +151,9 @@ export function wireSeat(bomb: Bomb, view: NetView, wireId: string): string {
   if (wire.open) return "Anima interrotta sotto l'isolante: non conduce in nessun verso. Tratto morto, fuori da ogni percorso.";
   if (wire.a === "timer-clk" || wire.b === "timer-clk") {
     return "Filo del quarzo: dà il passo al conto alla rovescia. Tagliarlo non ferma il timer, lo fa correre al doppio.";
+  }
+  if (wire.a === "det-aux" || wire.b === "det-aux") {
+    return "Filo del gemello: sul morsetto TEST non c'è nessun collaudo, c'è un secondo conteggio nascosto sotto l'innesco. Finché questo filo è intero, aprire la linea ferma il display e sveglia l'altro.";
   }
   const present: NetView = { ...view, cutIds: view.cutIds.filter((id) => id !== wireId) };
   const edges = netEdges(bomb, present);

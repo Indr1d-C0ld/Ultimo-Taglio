@@ -29,6 +29,9 @@ function openUp(seed: string, difficulty: Difficulty): RunState {
 function solve(seed: string, difficulty: Difficulty): { state: RunState; cuts: number } {
   let s = openUp(seed, difficulty);
   let cuts = 0;
+  // A careful player has read the TEST post and takes the twin's wire off first.
+  const twin = s.bomb!.wires.find((w) => w.role === "gemello");
+  if (twin) s = reduce(s, { type: "pointer-wire", id: twin.id });
   for (const wire of s.bomb!.wires.filter((w) => w.role === "sicura")) {
     if (s.phase !== "play") break;
     const view = { cutIds: s.cutIds, jumpers: s.jumpers, codeUnlocked: s.codeUnlocked, capDumped: s.capDumped };
@@ -56,7 +59,7 @@ function sceneChecks() {
       if (!/^\d{4}$/.test(bomb.code)) throw new Error(`code shape ${tag} ${bomb.code}`);
       const traps = bomb.wires.filter((w) => w.role === "trappola");
       if (!bomb.code.endsWith(String((bomb.wires.length - traps.length) % 10))) throw new Error(`digit ${tag}`);
-      if (bomb.wires.length > 13) throw new Error(`too many wires ${tag} ${bomb.wires.length}`);
+      if (bomb.wires.length > 14) throw new Error(`too many wires ${tag} ${bomb.wires.length}`);
       const pairs = new Set(bomb.wires.map((w) => [w.a, w.b].sort().join("|")));
       if (pairs.size !== bomb.wires.length) throw new Error(`two wires share both ends ${tag}`);
 
@@ -77,6 +80,7 @@ function sceneChecks() {
           (cls === "timer") === seat.includes("Fra cella e TIMER") &&
           (cls === "cluster") === seat.includes("CLUSTER") &&
           (cls === "quarzo") === seat.includes("Filo del quarzo") &&
+          (cls === "gemello") === seat.includes("Filo del gemello") &&
           (cls === "cieco") === seat.includes("Ramo cieco") &&
           (cls === "morto") === seat.includes("Ritorno morto") &&
           (cls === "rotto") === seat.includes("Anima interrotta");
@@ -332,6 +336,62 @@ describe("decodifiche manuali", () => {
     expect(said[2]).toContain(`Terza cifra: ${bomb.code[2]}`);
     expect(said[3]).toContain(`Codice: ${bomb.code}`);
     expect(s.decoded).toEqual({ uv: true, blinks: true, morse: true });
+  });
+});
+
+describe("secondo timer", () => {
+  const withTwin = (d: Difficulty) => SEEDS.find((seed) => play(seed, d).bomb!.twin !== null)!;
+
+  test("mai in comparsa, a volte più su, e il suo filo non tocca le due reti", () => {
+    const has = (d: Difficulty) => SEEDS.filter((seed) => play(seed, d).bomb!.twin !== null).length;
+    expect(has("comparsa")).toBe(0);
+    expect(has("caratterista")).toBeGreaterThan(20);
+    expect(has("caratterista")).toBeLessThan(has("protagonista"));
+    expect(has("protagonista")).toBeLessThan(SEEDS.length);
+    const bomb = play(withTwin("protagonista"), "protagonista").bomb!;
+    const wire = bomb.wires.find((w) => w.role === "gemello")!;
+    const view = { cutIds: [], jumpers: [], codeUnlocked: true, capDumped: true };
+    expect(wireClass(bomb, view, wire.id)).toBe("gemello");
+    expect(bomb.modules.find((m) => m.id === "detonator")!.terminals.some((t) => t.id === "det-aux")).toBe(true);
+  });
+
+  const openLine = (seed: string) => {
+    let s = openUp(seed, "protagonista");
+    for (const wire of s.bomb!.wires.filter((w) => w.role === "sicura")) {
+      if (s.twinLeft !== null) break;
+      const view = { cutIds: s.cutIds, jumpers: s.jumpers, codeUnlocked: s.codeUnlocked, capDumped: s.capDumped };
+      if (!edgeCarries(netEdges(s.bomb!, view), "det-inhibit", "bat-neg", wire.id)) continue;
+      s = reduce(s, { type: "pointer-wire", id: wire.id });
+    }
+    return s;
+  };
+
+  test("aprire la linea col gemello intatto ferma il display e sveglia l'altro", () => {
+    let s = openLine(withTwin("protagonista"));
+    expect(s.phase).toBe("play");
+    expect(s.twinLeft).toBe(14);
+    expect(s.mistakes).toBe(1);
+    const frozen = s.secondsLeft;
+    for (let i = 0; i < 6; i++) s = reduce(s, { type: "tick", dt: 0.5 });
+    expect(s.secondsLeft).toBe(frozen);
+    expect(s.twinLeft).toBe(11);
+    const wire = s.bomb!.wires.find((w) => w.role === "gemello")!;
+    s = reduce(s, { type: "pointer-wire", id: wire.id });
+    expect(s.phase).toBe("safe");
+    expect(s.endReason).toContain("Gemello fermato a 11 secondi");
+  });
+
+  test("se nessuno lo trova, il gemello arriva a zero", () => {
+    let s = openLine(withTwin("protagonista"));
+    for (let i = 0; i < 40 && s.phase === "play"; i++) s = reduce(s, { type: "tick", dt: 0.5 });
+    expect(s.phase).toBe("boom");
+    expect(s.endCause).toBe("gemello");
+  });
+
+  test("tagliato prima, il finale è quello vero", () => {
+    const { state } = solve(withTwin("protagonista"), "protagonista");
+    expect(state.phase).toBe("safe");
+    expect(state.twinLeft).toBeNull();
   });
 });
 

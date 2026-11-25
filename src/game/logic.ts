@@ -61,6 +61,7 @@ export function initialState(): RunState {
     bridgeCause: null,
     bridgeWarned: false,
     rush: false,
+    twinLeft: null,
     mods: [],
     campaign: null,
     endCause: null,
@@ -83,6 +84,7 @@ function boom(s: RunState, reason: string): RunState {
 }
 
 const CAUSES: [RegExp, EndCause][] = [
+  [/secondo conteggio/i, "gemello"],
   [/tempo di scena è finito/i, "tempo"],
   [/percorso dalla cella all'innesco/i, "trappola"],
   [/microswitch/i, "microswitch"],
@@ -337,6 +339,23 @@ function tick(s: RunState, dt: number): RunState {
   if (n.mode !== "ripresa" || !n.bomb) return n;
   const bomb = n.bomb;
 
+  // The line is open and the display has stopped: only the twin counts now, at its own pace.
+  if (n.twinLeft !== null) {
+    let acc = n.timeAcc + step;
+    let twin = n.twinLeft;
+    while (acc >= 1) {
+      acc -= 1;
+      twin -= 1;
+    }
+    if (twin <= 0) {
+      return boom(
+        { ...n, twinLeft: 0, timeAcc: 0 },
+        "Il secondo conteggio è arrivato a zero. L'innesco aveva un gemello sul morsetto TEST, e nessuno gli ha tagliato il filo.",
+      );
+    }
+    return { ...n, twinLeft: twin, timeAcc: acc };
+  }
+
   let acc = n.timeAcc + step * (n.rush ? 2 : 1);
   let left = n.secondsLeft;
   let whole = 0;
@@ -535,6 +554,18 @@ function onWire(s: RunState, id: string): RunState {
     n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id), rush: true, mistakes: n.mistakes + 1 };
     return say(n, "Hai tagliato il quarzo. Il timer non si ferma: perde il passo e il conto corre al doppio.", "bad");
   }
+  if (wire.role === "gemello") {
+    n = { ...n, cutIds: [...n.cutIds, id], knownWireIds: know(n, id) };
+    if (n.twinLeft === null) {
+      return say(n, "Filo del TEST tagliato. Sotto l'innesco un secondo conteggio, che nessuno aveva annunciato, resta senza corrente.", "good");
+    }
+    const twin = n.twinLeft;
+    n = { ...n, phase: "safe", endCause: "disinnesco" };
+    return {
+      ...say(n, "Il gemello si ferma. Adesso sì: l'innesco di scena resta muto.", "good"),
+      endReason: `Gemello fermato a ${twin} ${twin === 1 ? "secondo" : "secondi"} dallo zero, con ${formatClock(n.secondsLeft)} fermi sul display.`,
+    };
+  }
   if (wire.role === "senso") {
     n = {
       ...n,
@@ -590,6 +621,19 @@ function onWire(s: RunState, id: string): RunState {
       n,
       `${colorName(wire.color)} aperto, ma l'INIBITORE vede ancora BAT − da un altro ramo. La linea resta chiusa.`,
       "warn",
+    );
+  }
+  if (n.twinLeft !== null) return say(n, "La linea è già aperta. Non è lei che sta contando.", "warn");
+  const twinWire = bomb.wires.find((w) => w.role === "gemello");
+  if (bomb.twin !== null && twinWire && !n.cutIds.includes(twinWire.id)) {
+    // Waking the twin is a slip: the scene can still be saved, but not as a clean take.
+    n = { ...n, twinLeft: bomb.twin, timeAcc: 0, mistakes: n.mistakes + 1, bridge: 0, bridgeHot: false, bridgeCause: null };
+    return say(
+      n,
+      n.mode === "ripresa"
+        ? `Inibitore aperto. Il display si ferma. Poi, sotto l'innesco, qualcosa ricomincia a contare: ${bomb.twin} secondi. C'è un altro filo.`
+        : "Inibitore aperto. Il display si ferma. Poi, sotto l'innesco, si accende un secondo conteggio: in prova resta fermo, ma c'è un altro filo da trovare.",
+      "bad",
     );
   }
   n = { ...n, phase: "safe", endCause: "disinnesco", bridge: 0, bridgeHot: false, bridgeCause: null };

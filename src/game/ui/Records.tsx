@@ -218,6 +218,7 @@ function SceneSheet() {
           <li>Ping dell'antenna subiti: <span className="text-fg">{run.pings}</span></li>
           <li>Display spento a fine scena: <span className="text-fg">{run.displayDead ? "sì" : "no"}</span></li>
           <li>Contatore B: <span className="text-fg">{run.dialMatched === null ? "non in scena" : run.dialMatched ? "allineato" : "ignorato"}</span></li>
+          <li>Secondo timer: <span className="text-fg">{run.twin == null ? "non in scena" : run.twin === "prevenuto" ? "scollegato prima" : run.twin === "partito" ? "svegliato" : "mai trovato"}</span></li>
           <li>Grano d'inclinazione: <span className="text-fg">{run.tiltLocked === null ? "non in scena" : run.tiltLocked ? "bloccato" : "libero"}</span></li>
         </ul>
       </Section>
