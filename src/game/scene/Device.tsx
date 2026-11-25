@@ -85,7 +85,7 @@ function swPost(shell: ShellFit, side: 1 | -1): Vec3 {
 }
 
 /** Where a module sits on the bench, in bench space. */
-function moduleHome(bomb: Bomb, mod: Module, exploded: boolean): Vec3 {
+export function moduleHome(bomb: Bomb, mod: Module, exploded: boolean): Vec3 {
   const shell = SHELLS[bomb.archetype];
   // Each shell says where its plate goes: riveted to a wall, hung from a flange, laid on a shelf.
   const home: Vec3 = mod.kind === "plate" && shell ? shell.plate.position : mod.position;
@@ -102,13 +102,21 @@ export function inspectPoint(bomb: Bomb, id: string, exploded: boolean): THREE.V
 }
 
 /**
- * A wire ends on its post and its grab area covers the post's top. With a tool that works on
- * posts in hand (meter, crocodile clips), the post under the pointer wins over the wire.
+ * A wire's grab area is fat, to be easy to pick, and wires run over everything. With a tool
+ * that does nothing to a wire in hand, the wire steps aside for what the tool is for:
+ * the post under the pointer for meter and crocodile clips, the module behind it for
+ * allen key, stethoscope and service cell.
  */
+const POST_TOOLS = ["multimetro", "ponticello"];
+const MODULE_TOOLS = ["brugola", "stetoscopio", "pila"];
 function postBehind(e: ThreeEvent<PointerEvent | MouseEvent>): boolean {
   const tool = useGame.getState().tool;
-  if (tool !== "multimetro" && tool !== "ponticello") return false;
-  return e.intersections.some((hit) => hit.object.userData.post === true);
+  if (POST_TOOLS.includes(tool)) return e.intersections.some((hit) => hit.object.userData.post === true);
+  if (!MODULE_TOOLS.includes(tool)) return false;
+  return e.intersections.some((hit) => {
+    for (let o: THREE.Object3D | null = hit.object; o; o = o.parent) if (o.userData.module) return true;
+    return false;
+  });
 }
 
 /** Pointer handlers that report what is under the cursor and show a hand over it. */
@@ -202,6 +210,7 @@ function ModuleMesh({ mod }: { mod: Module }) {
       position={moduleHome(bomb, mod, exploded)}
       rotation={upright ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
       scale={upright ? 0.92 : 1}
+      userData={{ module: mod.id }}
       onClick={(e) => {
         e.stopPropagation();
         dispatch({ type: "pointer-part", id: mod.id });
