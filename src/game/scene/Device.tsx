@@ -120,6 +120,8 @@ function hoverHandlers(id: string) {
   };
 }
 
+const corner = new THREE.Vector3();
+
 function Attitude({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   const archetype = useGame((s) => s.bomb?.archetype ?? "valigetta");
@@ -129,6 +131,18 @@ function Attitude({ children }: { children: React.ReactNode }) {
     if (!ref.current) return;
     ref.current.rotation.x += (a.x - ref.current.rotation.x) * Math.min(1, d * 8);
     ref.current.rotation.z += (a.z - ref.current.rotation.z) * Math.min(1, d * 8);
+    // The hand lifts as it tips: the lowest corner of the base never goes through the table.
+    const shell = SHELLS[archetype];
+    let lift = 0;
+    if (shell) {
+      for (const sx of [-1, 1]) {
+        for (const z of [shell.frontZ, shell.backZ]) {
+          corner.set(sx * shell.sideX, shell.bottomY, z).applyEuler(ref.current.rotation);
+          lift = Math.max(lift, shell.bottomY - corner.y);
+        }
+      }
+    }
+    ref.current.position.y = benchY(archetype) + lift;
   });
   return (
     <group ref={ref} position={[0, benchY(archetype), 0]}>
@@ -340,12 +354,15 @@ function uvPlaces(shell: ShellFit | undefined): { position: Vec3; rotation: Vec3
     ];
   }
   const deck = { position: [0.36, 0.034, 0.7] as Vec3, rotation: [-Math.PI / 2, 0, 0] as Vec3 };
-  if (shell.uv) return [...shell.uv, deck];
+  // Facing down, top of the digit towards the catches: it reads upright when the front edge is lifted.
+  const under = { position: [0.3, shell.bottomY - 0.004, 0.15] as Vec3, rotation: [Math.PI / 2, 0, 0] as Vec3 };
+  if (shell.uv) return [...shell.uv, deck, under];
   return [
     { position: [shell.sideX + 0.012, shell.wallMidY, -0.2], rotation: [0, Math.PI / 2, 0] },
     { position: [-shell.sideX - 0.012, shell.wallMidY, 0.2], rotation: [0, -Math.PI / 2, 0] },
     { position: [0.62, shell.wallMidY, shell.backZ - 0.012], rotation: [0, Math.PI, 0] },
     deck,
+    under,
   ];
 }
 

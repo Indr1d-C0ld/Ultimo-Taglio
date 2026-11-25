@@ -190,6 +190,7 @@ function Maneggio() {
     const el = gl.domElement;
     let last: { x: number; y: number } | null = null;
     const down = (e: PointerEvent) => {
+      if (e.button !== 0) return;
       if (useGame.getState().tool !== "maneggio" || useGame.getState().phase !== "play") return;
       last = { x: e.clientX, y: e.clientY };
     };
@@ -200,7 +201,9 @@ function Maneggio() {
       last = { x: e.clientX, y: e.clientY };
       useGame.getState().dispatch({ type: "rotate", dx: dy, dz: -dx });
     };
+    // The hand holds the prop up only while the button is down; letting go rests it on the table.
     const up = () => {
+      if (last) useGame.getState().dispatch({ type: "reset-attitude" });
       last = null;
     };
     el.addEventListener("pointerdown", down);
@@ -302,7 +305,12 @@ function Controls() {
   return (
     <OrbitControls
       ref={controls}
-      enabled={!(tool === "maneggio" && phase === "play")}
+      // With the hand on the prop the left button tilts it; the right one still moves the camera.
+      mouseButtons={
+        tool === "maneggio" && phase === "play"
+          ? { LEFT: -1 as THREE.MOUSE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }
+          : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }
+      }
       enablePan
       // A drag or a pinch always wins over a flight in progress.
       onStart={() => {

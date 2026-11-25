@@ -37,7 +37,6 @@ interface UiState {
   archive: boolean;
   sound: boolean;
   dossier: boolean;
-  bag: boolean;
   /** Mirror of what is in storage, so the screens re-render when it changes. */
   save: Save;
   lastRun: RunRecord | null;
@@ -76,7 +75,6 @@ interface UiState {
   toggleArchive: () => void;
   toggleSound: () => void;
   toggleDossier: () => void;
-  toggleBag: () => void;
 }
 
 export type Panel = "partita" | "carriera" | "fama" | "graduatoria" | "premi" | "camerino";
@@ -155,7 +153,6 @@ export const useGame = create<GameStore>((set, get) => ({
   archive: false,
   sound: true,
   dossier: false,
-  bag: false,
   dispatch: (action) => {
     const prev = get();
     if (action.type === "start" || action.type === "pointer-terminal" || action.type === "keypad") unlockAudio();
@@ -248,7 +245,6 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ sound });
   },
   toggleDossier: () => set({ dossier: !get().dossier }),
-  toggleBag: () => set({ bag: !get().bag }),
 }));
 
 export function emitView(type: "zoom-in" | "zoom-out" | "reset" | "focus") {

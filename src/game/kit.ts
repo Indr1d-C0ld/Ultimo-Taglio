@@ -12,7 +12,7 @@ export interface KitItem {
 
 export const KIT: KitItem[] = [
   { id: "occhio", label: "Occhio", group: "mano", fits: "Tutto il banco", blurb: "Seleziona. Non taglia, non sposta." },
-  { id: "maneggio", label: "Maneggio", group: "mano", fits: "Assetto", blurb: "Inclina l'ordigno. La camera, da sola, non lo fa." },
+  { id: "maneggio", label: "Maneggio", group: "mano", fits: "Assetto", blurb: "Trascina per sollevare e inclinare l'ordigno: mostra cosa c'è sotto. Lasci, e torna giù." },
   { id: "pinzette", label: "Pinzette", group: "mano", fits: "Ponticelli", blurb: "Staccano un coccodrillo. A coperchio aperto, sul microswitch, è il finale." },
   { id: "multimetro", label: "Multimetro", group: "misura", fits: "Morsetti", blurb: "Due sonde. Verso, perla, e se la cella passa da quel tratto." },
   { id: "stetoscopio", label: "Stetoscopio", group: "misura", fits: "Antenna", blurb: "Fa sentire il battito del ricevitore. Contarlo tocca a te." },

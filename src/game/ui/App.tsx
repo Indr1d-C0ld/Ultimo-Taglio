@@ -29,7 +29,7 @@ import { ARTICLES, DIFFICULTY_COPY, DISCLAIMER } from "../catalog";
 import { wireSeat, type NetView } from "../circuit";
 import { ARCHETYPES } from "../generate";
 import { KIT, KIT_GROUPS, fitLine, kitItem } from "../kit";
-import { findWire, formatClock, stages } from "../logic";
+import { findWire, formatClock, stages, tiltRatio } from "../logic";
 import { colorHex, colorName, terminalLabel } from "../palette";
 import { randomSeed } from "../rng";
 import { activeProfile, markRead } from "../save";
@@ -141,8 +141,6 @@ export function App() {
         </div>
       </div>
       <LogBar />
-      <MobileBar />
-      <BagSheet />
       {archive && <Archive />}
       <Records />
       <Film />
@@ -273,7 +271,7 @@ function ToolRail() {
   );
 }
 
-function KitList({ onPick }: { onPick?: () => void }) {
+function KitList() {
   const tool = useGame((s) => s.tool);
   const dispatch = useGame((s) => s.dispatch);
   const phase = useGame((s) => s.phase);
@@ -300,7 +298,6 @@ function KitList({ onPick }: { onPick?: () => void }) {
                     disabled={phase !== "play"}
                     onClick={() => {
                       dispatch({ type: "tool", tool: item.id });
-                      onPick?.();
                     }}
                     className={`flex w-full items-start gap-2 rounded-sm border px-2 py-2 text-left ${tool === item.id ? "border-accent bg-surface" : "border-line"}`}
                   >
@@ -365,43 +362,6 @@ function ViewButtons({ disabled }: { disabled: boolean }) {
   );
 }
 
-function MobileBar() {
-  const tool = useGame((s) => s.tool);
-  const phase = useGame((s) => s.phase);
-  const toggleDossier = useGame((s) => s.toggleDossier);
-  const toggleBag = useGame((s) => s.toggleBag);
-  if (phase === "boot") return null;
-  return (
-    <div className="z-20 flex gap-1 border-t border-line bg-bg-raised p-2 md:hidden">
-      <button type="button" onClick={toggleBag} className="h-11 flex-1 rounded-sm border border-accent px-3 text-xs text-fg">
-        Borsa
-      </button>
-      <p className="flex h-11 flex-1 items-center justify-center truncate text-xs text-muted">{kitItem(tool).label}</p>
-      <button type="button" onClick={toggleDossier} className="h-11 flex-1 rounded-sm border border-line px-3 text-xs text-fg">
-        Scheda
-      </button>
-    </div>
-  );
-}
-
-function BagSheet() {
-  const bag = useGame((s) => s.bag);
-  const toggleBag = useGame((s) => s.toggleBag);
-  if (!bag) return null;
-  return (
-    <div className="fixed inset-0 z-30 flex flex-col bg-bg/95 md:hidden">
-      <div className="flex items-center justify-between border-b border-line px-3 py-2">
-        <p className="font-display tracking-widest text-fg">BORSA</p>
-        <button type="button" className="grid size-11 place-items-center" onClick={toggleBag} aria-label="Chiudi borsa">
-          <X className="size-4" />
-        </button>
-      </div>
-      <KitList onPick={toggleBag} />
-    </div>
-  );
-}
-
-/** Every take opens like one: bars, slate, clap. Keyed on the take so it replays each time. */
 function OpeningSlate() {
   const take = useGame((s) => s.take);
   const title = useGame((s) => s.bomb?.title ?? "");
@@ -517,8 +477,7 @@ function BridgeMeter() {
 
 function TiltGauge() {
   const ratio = useGame((s) => {
-    if (!s.bomb?.gates.tilt || s.tiltLocked || s.tool !== "maneggio") return 0;
-    return Math.min(1, Math.hypot(s.attitude.x, s.attitude.z) / 0.32);
+    return s.tool === "maneggio" ? tiltRatio(s) : 0;
   });
   const tool = useGame((s) => s.tool);
   if (tool !== "maneggio" || ratio <= 0) return null;

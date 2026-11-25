@@ -94,7 +94,7 @@ export const ARTICLES: Article[] = [
     kicker: "Guardia",
     body: [
       "Quattro cifre, poi OK. Giusto: lo sportello sulla sicura si ritrae e l'antenna, se c'era, smette di rubare tempo. Sbagliato: il codice si cancella e la ripresa perde dieci secondi.",
-      "Le cifre non stanno mai tutte nello stesso posto e vanno lette di persona. La lampada UV spegne le luci di scena e fa brillare una cifra dipinta sul guscio: può stare su un fianco, dietro, o sul fondo. Va cercata girandoci intorno.",
+      "Le cifre non stanno mai tutte nello stesso posto e vanno lette di persona. La lampada UV spegne le luci di scena e fa brillare una cifra dipinta sul guscio: può stare su un fianco, dietro, sul fondo o, nella valigetta, sotto la base: lì la camera non arriva, e va sollevata con il maneggio. Va cercata girandoci intorno.",
       "Il taccuino del codice, nella scheda, ha quattro caselle: le riempi tu man mano. Il suggeritore, a pagamento di secondi, regala una cifra per volta.",
       "Puoi comporre dal dossier anche se il vetro è ancora chiuso. Lo sportello fisico, però, libera il filo solo quando il banco è aperto e le altre guardie sono a posto.",
     ],
@@ -105,7 +105,7 @@ export const ARTICLES: Article[] = [
     kicker: "Rischio",
     body: [
       "Un tubetto di vetro, una pallina da film. Se maneggi l'ordigno oltre la tacca, la pallina chiude il contatto di scena.",
-      "La camera può girarci intorno quanto vuole: l'assetto dell'oggetto non cambia. Il maneggio, invece, è la mano sul prop. Prima si serra la vite di blocco con la brugola, poi si inclina.",
+      "La camera può girarci intorno quanto vuole: l'assetto dell'oggetto non cambia. Il maneggio, invece, è la mano sul prop. Prima si serra la vite di blocco con la brugola, poi si inclina. La mano la solleva finché tieni premuto e la riposa quando lasci: serve a guardare sotto la base.",
       "La vista esplosa scosta i moduli senza ruotare il banco: non sveglia il grano. In comparsa, spesso, il grano non è nemmeno in scena.",
     ],
   },

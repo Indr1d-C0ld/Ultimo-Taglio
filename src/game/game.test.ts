@@ -262,7 +262,30 @@ describe("decodifiche manuali", () => {
 
   test("la cifra UV non sta sempre sulla stessa faccia", () => {
     const spots = new Set(SEEDS.map((seed) => play(seed, "caratterista").bomb!.uvSpot));
-    expect(spots.size).toBe(4);
+    expect(spots.size).toBe(5);
+  });
+
+  test("sotto la base la cifra sta solo in valigetta, l'unica che si solleva", () => {
+    const under = SEEDS.map((seed) => play(seed, "caratterista").bomb!).filter((b) => b.uvSpot === 4);
+    expect(under.length).toBeGreaterThan(0);
+    expect(under.every((b) => b.archetype === "valigetta")).toBe(true);
+  });
+
+  test("il maneggio solleva oltre la tacca solo a grano bloccato o assente", () => {
+    const free = SEEDS.map((seed) => play(seed, "comparsa")).find((s) => !s.bomb!.gates.tilt)!;
+    let s = reduce(free, { type: "tool", tool: "maneggio" });
+    s = reduce(s, { type: "rotate", dx: -3, dz: 0 });
+    expect(s.phase).toBe("play");
+    expect(s.attitude.x).toBeCloseTo(-1.1);
+    s = reduce(s, { type: "reset-attitude" });
+    expect(s.attitude).toEqual({ x: 0, z: 0 });
+
+    const armed = SEEDS.map((seed) => play(seed, "caratterista")).find((s) => s.bomb!.gates.tilt)!;
+    let t = reduce(armed, { type: "tool", tool: "maneggio" });
+    t = reduce(t, { type: "rotate", dx: -0.2, dz: 0 });
+    expect(t.phase).toBe("play");
+    t = reduce(t, { type: "rotate", dx: -0.3, dz: 0 });
+    expect(t.phase).toBe("boom");
   });
 
   test("lo stetoscopio fa ascoltare l'antenna per due giri e non rivela nulla", () => {

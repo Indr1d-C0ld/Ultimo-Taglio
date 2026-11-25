@@ -37,7 +37,19 @@ export const ARCHETYPES: Record<
 };
 
 /** Faces of the shell where the UV digit may be painted, as the prompter names them. */
-export const UV_SPOTS = ["sul fianco destro", "sul fianco sinistro", "sulla parete posteriore", "sul fondo, verso le chiusure"] as const;
+export const UV_SPOTS = [
+  "sul fianco destro",
+  "sul fianco sinistro",
+  "sulla parete posteriore",
+  "sul fondo, verso le chiusure",
+  "sotto la base: va sollevata con il maneggio",
+] as const;
+/** The spot no camera angle reaches: only a hand under the shell shows it. */
+export const UV_UNDER = 4;
+/** Only the case is light enough to be lifted off the table; the capsule and the cabinet stay put. */
+export function uvSpotsFor(archetype: "valigetta" | "cilindro" | "console"): number {
+  return archetype === "valigetta" ? UV_SPOTS.length : UV_UNDER;
+}
 
 const SLOT: Record<ModuleKind, Vec3> = {
   timer: [0, 0, -0.22],
@@ -99,7 +111,7 @@ export function generateBomb(seed: string, difficulty: Difficulty): Bomb {
   const seconds = TUNING[difficulty].seconds;
   const scene = 8 + Math.floor(rng() * 80);
 
-  const uvSpot = Math.floor(rng() * UV_SPOTS.length);
+  const uvSpot = Math.floor(rng() * uvSpotsFor(archetype));
 
   const modules = buildModules(gates, wires);
 

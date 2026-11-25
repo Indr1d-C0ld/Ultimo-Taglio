@@ -7,6 +7,8 @@ import { colorName, terminalLabel } from "./palette";
 import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, Modifier, RunState, Wire } from "./types";
 
 const TILT_LIMIT = 0.32;
+/** How far the hand can tip the prop: enough to show its underside to a low camera. */
+export const TILT_REACH = 1.1;
 const MAX_TICK = 0.5;
 
 export function initialState(): RunState {
@@ -666,8 +668,8 @@ function onRotate(s: RunState, dx: number, dz: number): RunState {
   if (!s.bomb) return s;
   if (s.tool !== "maneggio") return s;
   if (s.phase !== "play") return s;
-  const x = clamp(s.attitude.x + dx, -0.9, 0.9);
-  const z = clamp(s.attitude.z + dz, -0.9, 0.9);
+  const x = clamp(s.attitude.x + dx, -TILT_REACH, TILT_REACH);
+  const z = clamp(s.attitude.z + dz, -TILT_REACH, TILT_REACH);
   const n: RunState = { ...s, attitude: { x, z } };
   if (!s.bomb.gates.tilt || s.tiltLocked) return n;
   const mag = Math.hypot(x, z);
