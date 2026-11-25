@@ -38,10 +38,10 @@ import { Records } from "./Records";
 import { Film } from "./Film";
 import { Notebook } from "./Notebook";
 import { chainDifficulty, chainResults, chainSeed, firstLink, nextLink } from "../sequence";
-import { MODIFIERS, nextScene, sceneById, stopLine, ciakOf, filmProgress } from "../campaign";
+import { MODIFIERS, modBonus, toggleMod, nextScene, sceneById, stopLine, ciakOf, filmProgress } from "../campaign";
 import { emitView, useGame } from "../store";
 import { TUNING } from "../tuning";
-import type { Difficulty, Mode, ModuleKind, Tool } from "../types";
+import type { Difficulty, Mode, Modifier, ModuleKind, Tool } from "../types";
 
 const ICONS: Record<Tool, ComponentType<{ className?: string }>> = {
   occhio: Eye,
@@ -427,7 +427,7 @@ function HoverChip() {
 function SceneRules() {
   const mods = useGame((s) => s.mods);
   const phase = useGame((s) => s.phase);
-  const title = useGame((s) => sceneById(s.campaign)?.title ?? "");
+  const title = useGame((s) => sceneById(s.campaign)?.title ?? (s.mods.length ? "Regole di scena" : ""));
   if (phase !== "play" || !title) return null;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center px-48">
@@ -923,6 +923,8 @@ function Boot() {
   const toggleFilm = useGame((s) => s.toggleFilm);
   const filmDone = useGame((s) => filmProgress(activeProfile(s.save).runs).filter((p) => p.done).length);
   const daily = dailySeed(new Date());
+  const [rules, setRules] = useState<Modifier[]>([]);
+  const bonus = modBonus(rules);
   const bestChain = useGame((s) => chainResults(activeProfile(s.save).runs)[0]?.scenes ?? 0);
 
   useEffect(() => {
@@ -930,12 +932,14 @@ function Boot() {
   }, []);
 
   return (
-    <section className="pointer-events-auto max-h-[70dvh] w-full max-w-xl overflow-y-auto rounded-md border border-line bg-bg-raised/95 p-4 md:max-h-full md:p-5">
+    <section className="pointer-events-auto max-h-[90dvh] w-full max-w-5xl overflow-y-auto rounded-md border border-line bg-bg-raised/95 p-4 md:max-h-full md:p-5">
       <p className="text-xs tracking-[0.22em] text-lcd">PROTOCOLLO DI SCENA</p>
       <h1 className="font-display text-4xl leading-none tracking-wide text-fg md:text-5xl">ULTIMO TAGLIO</h1>
       <p className="mt-2 text-sm text-muted">
         Un ordigno da film, diverso a ogni seme. Si orbita, si apre, si misura, si taglia. Nessun colore è una regola.
       </p>
+      <div className="mt-4 grid grid-cols-2 items-start gap-6">
+        <div>
       <div className="mt-3 flex items-center justify-between gap-2 rounded-sm border border-line px-3 py-2">
         <p className="min-w-0 truncate text-sm text-muted">
           Interprete: <span className="text-fg">{performer}</span>
@@ -971,65 +975,6 @@ function Boot() {
         </span>
         <span className="lcd-readout shrink-0 text-sm">{bestChain ? `record ${bestChain}` : "—"}</span>
       </button>
-      <p className="mt-4 text-[10px] tracking-[0.2em] text-muted">SCENA LIBERA</p>
-      <div className="mt-1 grid gap-2">
-        {(Object.keys(DIFFICULTY_COPY) as Difficulty[]).map((id) => {
-          const copy = DIFFICULTY_COPY[id]!;
-          const on = difficulty === id;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setDifficulty(id)}
-              className={`rounded-sm border p-3 text-left ${on ? "border-accent bg-surface" : "border-line"}`}
-            >
-              <span className="flex items-baseline justify-between gap-3">
-                <span className="font-display tracking-wide text-fg">{copy.label}</span>
-                <span className="lcd-readout text-sm">{formatClock(TUNING[id].seconds).replace(/^0/, "")}</span>
-              </span>
-              <span className="mt-1 block text-sm text-muted">{copy.text}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setMode("ripresa")}
-          className={`h-11 flex-1 rounded-sm border text-sm ${mode === "ripresa" ? "border-accent text-fg" : "border-line text-muted"}`}
-        >
-          Ripresa
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("prova")}
-          className={`h-11 flex-1 rounded-sm border text-sm ${mode === "prova" ? "border-accent text-fg" : "border-line text-muted"}`}
-        >
-          Prova generale
-        </button>
-      </div>
-      <label className="mt-3 block text-xs text-muted">
-        Seme
-        <div className="mt-1 flex gap-2">
-          <input
-            value={seed}
-            onChange={(e) => setSeed(e.target.value.toUpperCase())}
-            className="h-11 min-w-0 flex-1 border border-line bg-bg px-3 font-mono text-sm text-fg outline-none"
-            maxLength={12}
-            spellCheck={false}
-          />
-          <button type="button" onClick={() => setSeed(randomSeed())} className="h-11 border border-line px-3 text-sm text-muted">
-            Nuovo
-          </button>
-        </div>
-      </label>
-      <button
-        type="button"
-        onClick={() => dispatch({ type: "start", seed, difficulty, mode })}
-        className="mt-3 h-12 w-full rounded-sm bg-accent font-display text-lg tracking-[0.18em] text-fg"
-      >
-        AZIONE
-      </button>
       <button
         type="button"
         onClick={() => dispatch({ type: "start", seed: daily, difficulty: "caratterista", mode: "ripresa" })}
@@ -1044,6 +989,94 @@ function Boot() {
         <button type="button" onClick={toggleArchive} className="h-11 flex-1 text-sm text-lcd">
           Archivio di scena
         </button>
+      </div>
+        </div>
+        <div>
+      <p className="text-[10px] tracking-[0.2em] text-muted">SCENA LIBERA</p>
+      <div className="mt-1 grid grid-cols-3 gap-1">
+        {(Object.keys(DIFFICULTY_COPY) as Difficulty[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={difficulty === id}
+            onClick={() => setDifficulty(id)}
+            className={`flex h-11 items-center justify-between gap-2 rounded-sm border px-3 ${difficulty === id ? "border-accent bg-surface" : "border-line"}`}
+          >
+            <span className="font-display tracking-wide text-fg">{DIFFICULTY_COPY[id]!.label}</span>
+            <span className="lcd-readout text-sm">{formatClock(TUNING[id].seconds).replace(/^0/, "")}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 min-h-10 text-sm text-muted">{DIFFICULTY_COPY[difficulty]!.text}</p>
+      <div className="mt-2 grid grid-cols-[1fr_1fr_1.6fr] items-end gap-1">
+        <button
+          type="button"
+          aria-pressed={mode === "ripresa"}
+          onClick={() => setMode("ripresa")}
+          className={`h-10 rounded-sm border text-sm ${mode === "ripresa" ? "border-accent text-fg" : "border-line text-muted"}`}
+        >
+          Ripresa
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "prova"}
+          onClick={() => setMode("prova")}
+          title="Prova generale: il tempo non scorre"
+          className={`h-10 rounded-sm border text-sm ${mode === "prova" ? "border-accent text-fg" : "border-line text-muted"}`}
+        >
+          Prova
+        </button>
+        <label className="flex h-10 items-center gap-1 border border-line bg-bg pl-2 text-xs text-muted">
+          Seme
+          <input
+            value={seed}
+            onChange={(e) => setSeed(e.target.value.toUpperCase())}
+            className="h-full min-w-0 flex-1 bg-transparent px-1 font-mono text-sm text-fg outline-none"
+            maxLength={12}
+            spellCheck={false}
+          />
+          <button type="button" onClick={() => setSeed(randomSeed())} className="h-full border-l border-line px-2 text-xs text-muted">
+            Nuovo
+          </button>
+        </label>
+      </div>
+      <div className="mt-3 flex items-baseline justify-between">
+        <p className="text-[10px] tracking-[0.2em] text-muted">REGOLE IN PIÙ · FACOLTATIVE</p>
+        <p className={`font-mono text-xs ${bonus > 0 ? "text-ok" : bonus < 0 ? "text-accent" : "text-faint"}`}>
+          punteggio {bonus > 0 ? "+" : bonus < 0 ? "−" : ""}
+          {Math.abs(bonus)}%
+        </p>
+      </div>
+      <div className="mt-1 grid grid-cols-3 gap-1">
+        {(Object.keys(MODIFIERS) as Modifier[]).map((id) => {
+          const on = rules.includes(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              title={MODIFIERS[id].text}
+              aria-pressed={on}
+              onClick={() => setRules(toggleMod(rules, id))}
+              className={`flex h-9 items-center justify-between gap-1 rounded-sm border px-2 text-left text-[11px] ${on ? "border-accent bg-surface text-fg" : "border-line text-muted"}`}
+            >
+              <span className="truncate">{MODIFIERS[id].label}</span>
+              <span className={`shrink-0 font-mono text-[10px] ${MODIFIERS[id].bonus < 0 ? "text-accent" : "text-ok"}`}>
+                {MODIFIERS[id].bonus > 0 ? "+" : "−"}
+                {Math.abs(MODIFIERS[id].bonus)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {rules.length > 0 && <p className="mt-1 text-xs text-lcd">{rules.map((m) => MODIFIERS[m].text).join(" ")}</p>}
+      <button
+        type="button"
+        onClick={() => dispatch({ type: "start", seed, difficulty, mode, mods: rules })}
+        className="mt-3 h-12 w-full rounded-sm bg-accent font-display text-lg tracking-[0.18em] text-fg"
+      >
+        AZIONE
+      </button>
+        </div>
       </div>
       <p className="mt-3 text-xs text-faint">{DISCLAIMER}</p>
     </section>
@@ -1167,7 +1200,7 @@ function EndCard() {
           <button
             type="button"
             className="h-11 flex-1 rounded-sm border border-line text-sm text-fg"
-            onClick={() => dispatch({ type: "start", seed: randomSeed(), difficulty, mode })}
+            onClick={() => dispatch({ type: "start", seed: randomSeed(), difficulty, mode, mods })}
           >
             Nuova scena
           </button>

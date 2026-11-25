@@ -1,3 +1,4 @@
+import { modBonus } from "./campaign";
 import { chainResults } from "./sequence";
 import type { Archetype, Difficulty, EndCause, Mode, RunState } from "./types";
 
@@ -112,6 +113,8 @@ export function scoreSheet(r: Omit<RunRecord, "score" | "grade">): ScoreLine[] {
   if (r.hints === 0 && r.mistakes === 0) {
     lines.push({ label: "Buona la prima (+25%)", points: Math.round(subtotal * 0.25) });
   }
+  const bonus = modBonus(r.mods ?? []);
+  if (bonus) lines.push({ label: `Regole di scena (${bonus > 0 ? "+" : "−"}${Math.abs(bonus)}%)`, points: Math.round((subtotal * bonus) / 100) });
   return lines;
 }
 
@@ -312,6 +315,7 @@ export const AWARDS: Award[] = [
   { id: "coda", title: "Colpo di coda", text: "Ferma il secondo timer dopo che si è svegliato.", earned: (r) => won(r).some((x) => x.twin === "partito") },
   { id: "silenzio", title: "Silenzio radio", text: "Disinnesca da protagonista senza radio e senza suggeritore.", earned: (r) => won(r).some((x) => x.difficulty === "protagonista" && x.hints === 0 && x.calls === 0) },
   { id: "sequenza", title: "Senza stacchi", text: "Cinque scene di fila in un piano sequenza.", earned: (_, c) => c.bestChain >= 5 },
+  { id: "sadico", title: "Regista sadico", text: "Disinnesca una scena con almeno quattro regole in più.", earned: (r) => won(r).some((x) => (x.mods?.length ?? 0) >= 4) },
   { id: "buio", title: "Al buio", text: "Disinnesca con il display spento.", earned: (r) => won(r).some((x) => x.displayDead) },
   { id: "carrozzerie", title: "Tris di carrozzerie", text: "Vinci con valigetta, cilindro e console.", earned: (_, c) => Object.values(c.byArchetype).every((s) => s.won >= 1) },
   { id: "serie", title: "Cinque ciak di fila", text: "Cinque disinneschi consecutivi in ripresa.", earned: (_, c) => c.bestStreak >= 5 },

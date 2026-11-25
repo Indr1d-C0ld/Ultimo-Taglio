@@ -1,17 +1,34 @@
 import type { Grade, RunRecord } from "./stats";
 import type { Difficulty, EndCause, Modifier } from "./types";
 
-export const MODIFIERS: Record<Modifier, { label: string; text: string }> = {
-  "suggeritore-gratis": { label: "Suggeritore in quinta", text: "I suggerimenti non costano secondi." },
-  "suggeritore-muto": { label: "Senza suggeritore", text: "Nessun suggerimento disponibile." },
-  "copione-strappato": { label: "Copione strappato", text: "L'archivio resta chiuso per tutta la scena." },
-  "luci-basse": { label: "Blackout", text: "Luci di scena spente: resta la torcia che segue la camera." },
-  "tronchese-spuntata": { label: "Tronchese spuntata", text: "Ogni taglio a vuoto costa venti secondi." },
-  "radio-disturbata": { label: "Radio disturbata", text: "L'antenna ruba secondi più spesso." },
-  "display-rotto": { label: "Display rotto", text: "Il timer è buio dall'inizio e non c'è pila di servizio." },
-  "tempo-stretto": { label: "Montaggio serrato", text: "Un quinto di tempo in meno." },
-  "senza-rete": { label: "Buona la prima", text: "Al primo errore il regista ferma tutto." },
+/** Each rule, and what it is worth on the score sheet: a handicap pays, a help costs. */
+export const MODIFIERS: Record<Modifier, { label: string; text: string; bonus: number }> = {
+  "suggeritore-gratis": { label: "Suggeritore in quinta", text: "I suggerimenti non costano secondi.", bonus: -20 },
+  "suggeritore-muto": { label: "Senza suggeritore", text: "Niente suggeritore e niente radio.", bonus: 10 },
+  "copione-strappato": { label: "Copione strappato", text: "L'archivio resta chiuso per tutta la scena.", bonus: 5 },
+  "luci-basse": { label: "Blackout", text: "Luci di scena spente: resta la torcia che segue la camera.", bonus: 15 },
+  "tronchese-spuntata": { label: "Tronchese spuntata", text: "Ogni taglio a vuoto costa venti secondi.", bonus: 10 },
+  "radio-disturbata": { label: "Radio disturbata", text: "L'antenna ruba secondi più spesso e ogni chiamata alla radio costa il doppio.", bonus: 10 },
+  "display-rotto": { label: "Display rotto", text: "Il timer è buio dall'inizio e non c'è pila di servizio.", bonus: 15 },
+  "tempo-stretto": { label: "Montaggio serrato", text: "Un quinto di tempo in meno.", bonus: 20 },
+  "senza-rete": { label: "Buona la prima", text: "Al primo errore il regista ferma tutto.", bonus: 25 },
 };
+
+/** Percentage the rules in force add to (or take from) a scene's score. */
+export function modBonus(mods: readonly string[]): number {
+  return mods.reduce((sum, m) => sum + (MODIFIERS[m as Modifier]?.bonus ?? 0), 0);
+}
+
+/** Rules that cannot be in force together: picking one drops the other. */
+export const MOD_CLASH: Partial<Record<Modifier, Modifier>> = {
+  "suggeritore-gratis": "suggeritore-muto",
+  "suggeritore-muto": "suggeritore-gratis",
+};
+
+export function toggleMod(mods: Modifier[], mod: Modifier): Modifier[] {
+  if (mods.includes(mod)) return mods.filter((m) => m !== mod);
+  return [...mods.filter((m) => m !== MOD_CLASH[mod]), mod];
+}
 
 export interface FilmScene {
   id: string;

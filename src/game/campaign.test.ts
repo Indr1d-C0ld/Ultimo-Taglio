@@ -122,3 +122,27 @@ describe("il film", () => {
     expect(nextScene("f12")).toBeUndefined();
   });
 });
+
+describe("regole a scelta", () => {
+  test("le percentuali si sommano, e un aiuto toglie punti", async () => {
+    const { modBonus, toggleMod } = await import("./campaign");
+    expect(modBonus([])).toBe(0);
+    expect(modBonus(["tempo-stretto", "senza-rete"])).toBe(45);
+    expect(modBonus(["suggeritore-gratis"])).toBe(-20);
+    expect(toggleMod(["suggeritore-gratis", "luci-basse"], "suggeritore-muto")).toEqual(["luci-basse", "suggeritore-muto"]);
+    expect(toggleMod(["luci-basse"], "luci-basse")).toEqual([]);
+  });
+
+  test("la scheda punti porta la riga delle regole", async () => {
+    const { scoreSheet } = await import("./stats");
+    const base = {
+      id: "x", at: 0, seed: "X", difficulty: "caratterista", mode: "ripresa", archetype: "valigetta", outcome: "safe", cause: "disinnesco", reason: "",
+      daily: null, budget: 360, left: 100, elapsed: 260, lost: 0, hints: 1, mistakes: 0, probes: 0, wrongCodes: 0, decoyCuts: 1, lineCuts: 1,
+      pings: 0, wires: 9, wiresRead: 3, hidden: 0, displayDead: false, dialMatched: null, tiltLocked: null, stageAt: {},
+    } as unknown as Parameters<typeof scoreSheet>[0];
+    const plain = scoreSheet(base).reduce((s, l) => s + l.points, 0);
+    const hard = scoreSheet({ ...base, mods: ["tempo-stretto", "luci-basse"] });
+    expect(hard.at(-1)!.label).toBe("Regole di scena (+35%)");
+    expect(hard.reduce((s, l) => s + l.points, 0)).toBe(plain + Math.round(plain * 0.35));
+  });
+});
