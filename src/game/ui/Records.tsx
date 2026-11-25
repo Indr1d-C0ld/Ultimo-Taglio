@@ -176,6 +176,7 @@ function SceneSheet() {
         <Tile label="Misure" value={run.probes} note={`${Math.min(run.wiresRead, run.wires)} fili letti su ${run.wires}`} />
         <Tile label="Tagli" value={run.lineCuts + run.decoyCuts} note={`${run.lineCuts} sulla linea, ${run.decoyCuts} a vuoto`} />
         <Tile label="Suggerimenti" value={run.hints} />
+        <Tile label="Chiamate radio" value={run.calls ?? 0} />
         <Tile label="Errori" value={run.mistakes} note={`${run.wrongCodes} codici sbagliati, ${run.forced} forzature`} />
       </div>
       {sheet.length > 0 && (

@@ -122,6 +122,19 @@ function directWire(bomb: Bomb, view: NetView, a: string, b: string): Wire | und
   );
 }
 
+/** Cuts a careful hand needs to open the inhibitor line with every guard down: one, or two when a branch runs in parallel. */
+export function cutsNeeded(bomb: Bomb): number {
+  const view: NetView = { cutIds: [], jumpers: [], codeUnlocked: true, capDumped: true };
+  let cuts = 0;
+  for (const wire of bomb.wires.filter((w) => w.role === "sicura")) {
+    if (!lineClosed(bomb, view)) break;
+    if (!edgeCarries(netEdges(bomb, view), "det-inhibit", "bat-neg", wire.id)) continue;
+    view.cutIds = [...view.cutIds, wire.id];
+    cuts += 1;
+  }
+  return cuts;
+}
+
 export type WireClass = "trappola" | "linea" | "timer" | "cluster" | "quarzo" | "gemello" | "cieco" | "morto" | "rotto";
 
 /** What the meter makes of a wire, as a tag. The sentence for the same reading is wireSeat(). */

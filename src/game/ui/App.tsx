@@ -29,7 +29,7 @@ import { ARTICLES, DIFFICULTY_COPY, DISCLAIMER } from "../catalog";
 import { wireSeat, type NetView } from "../circuit";
 import { ARCHETYPES } from "../generate";
 import { KIT, KIT_GROUPS, fitLine, kitItem } from "../kit";
-import { findWire, formatClock, stages, tiltRatio } from "../logic";
+import { RADIO_ASKS, antennaLive, findWire, formatClock, radioAnswer, radioCost, stages, tiltRatio } from "../logic";
 import { colorHex, colorName, terminalLabel } from "../palette";
 import { randomSeed } from "../rng";
 import { activeProfile, markRead } from "../save";
@@ -561,9 +561,7 @@ function Dossier() {
       </button>
       <CodePad />
       <Notes />
-      <button type="button" onClick={() => dispatch({ type: "hint" })} className="mt-3 h-11 w-full rounded-sm border border-line text-sm text-lcd">
-        Suggerimento di scena
-      </button>
+      <Radio />
       {phase === "play" && (
         <button type="button" onClick={() => dispatch({ type: "abort" })} className="mt-2 h-10 w-full text-xs text-faint">
           Abbandona la scena
@@ -749,6 +747,60 @@ function ListenButton() {
 }
 
 const PAD_HINT = ["UV", "lampi", "battiti", "fili"];
+
+/**
+ * The accomplice on the radio, with the builder's drawings in front of them. Facts about the
+ * scene for a few seconds each; the prompter's line, which says what to do, costs more.
+ */
+function Radio() {
+  const dispatch = useGame((s) => s.dispatch);
+  const bomb = useGame((s) => s.bomb);
+  const asked = useGame((s) => s.asked);
+  const hints = useGame((s) => s.hintsUsed);
+  const phase = useGame((s) => s.phase);
+  const dead = useGame((s) => s.mods.includes("suggeritore-muto"));
+  const free = useGame((s) => s.mode !== "ripresa");
+  const freeHint = useGame((s) => s.mods.includes("suggeritore-gratis"));
+  // Changes with the antenna and the rules, not with the clock.
+  const cost = useGame((s) => radioCost(s));
+  const antenna = useGame((s) => antennaLive(s) && s.mode === "ripresa");
+  if (!bomb || phase !== "play") return null;
+  return (
+    <div className="mt-3 border border-line p-2">
+      <div className="flex items-baseline justify-between">
+        <p className="font-display text-xs tracking-widest text-lcd">RADIO · REGIA</p>
+        <p className="text-[10px] text-faint">{dead ? "solo fruscio" : free ? "in prova non costa" : `−${cost} s a domanda`}</p>
+      </div>
+      {antenna && !dead && <p className="mt-1 text-[11px] text-accent">L'antenna è in ascolto: ogni chiamata la sveglia.</p>}
+      <div className="mt-2 flex flex-col gap-1">
+        {RADIO_ASKS.map((q) => {
+          const done = asked.includes(q.id);
+          return (
+            <div key={q.id}>
+              <button
+                type="button"
+                disabled={dead}
+                onClick={() => dispatch({ type: "radio", ask: q.id })}
+                className={`h-8 w-full rounded-sm border px-2 text-left text-xs ${done ? "border-line text-muted" : "border-line text-fg"} disabled:text-faint`}
+              >
+                {q.label}
+              </button>
+              {done && <p className="border-l border-lcd px-2 py-1 font-serif text-xs italic text-lcd">«{radioAnswer(bomb, q.id)}»</p>}
+            </div>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        disabled={dead || hints >= 4}
+        onClick={() => dispatch({ type: "hint" })}
+        className="mt-2 h-9 w-full rounded-sm border border-lcd text-xs text-lcd disabled:border-line disabled:text-faint"
+      >
+        E adesso che faccio? {free || freeHint ? "" : "(−18 s)"}
+      </button>
+    </div>
+  );
+}
 
 /** Four boxes to jot the digits as you find them. Yours to fill: nothing here is checked. */
 function CodePad() {

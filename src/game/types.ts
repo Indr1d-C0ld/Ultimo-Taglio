@@ -130,6 +130,8 @@ export interface RunState {
   log: LogLine[];
   logSeq: number;
   hintsUsed: number;
+  /** Questions already put to the accomplice on the radio. Asking again is free. */
+  asked: RadioAsk[];
   mistakes: number;
   attitude: { x: number; z: number };
   listenLeft: number;
@@ -219,4 +221,8 @@ export type Action =
   | { type: "rotate"; dx: number; dz: number }
   | { type: "reset-attitude" }
   | { type: "listen" }
-  | { type: "hint" };
+  | { type: "hint" }
+  | { type: "radio"; ask: RadioAsk };
+
+/** What the accomplice on the radio can be asked: facts about the scene, never the solution. */
+export type RadioAsk = "trappole" | "tagli" | "gemello" | "rotti" | "uv";

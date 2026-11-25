@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { beep, blip, boom, clamp, clap, setMuted, setTension, snip, startScore, stopScore, unlockAudio, win } from "./audio";
+import { beep, blip, boom, clamp, clap, hushVoice, radioVoice, setMuted, setTension, snip, startScore, stopScore, unlockAudio, win } from "./audio";
 import { initialState, reduce } from "./logic";
 import {
   activeProfile,
@@ -124,6 +124,7 @@ function toRun(s: GameStore): RunState {
     log: s.log,
     logSeq: s.logSeq,
     hintsUsed: s.hintsUsed,
+    asked: s.asked,
     mistakes: s.mistakes,
     attitude: s.attitude,
     listenLeft: s.listenLeft,
@@ -171,7 +172,12 @@ export const useGame = create<GameStore>((set, get) => ({
       else setTension(Math.max(clock, next.bridgeHot ? 0.6 + next.bridge * 0.4 : 0) + (next.rush ? 0.25 : 0));
     }
     if (prev.phase === "play" && next.phase === "safe") fx.shake = 0.06;
+    if (prev.phase === "play" && next.phase !== "play") hushVoice();
     if (prev.sound) {
+      // The accomplice and the prompter both come over the radio: static, then the line read aloud.
+      if ((action.type === "radio" || action.type === "hint") && next.logSeq > prev.logSeq && next.phase === "play") {
+        radioVoice(next.log.at(-1)!.text.replace(/^Radio(, di nuovo)?: /, "").replace(/ La trasmissione sveglia.*$/, ""));
+      }
       if (next.cutIds.length > prev.cutIds.length) snip();
       if (next.tally.probes > prev.tally.probes) blip();
       if (next.jumpers.length > prev.jumpers.length) clamp();

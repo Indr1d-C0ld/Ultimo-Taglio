@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { edgeCarries, lineClosed, netEdges, probeReading, wireClass, wireSeat } from "./circuit";
-import { reduce, initialState, listenSpan } from "./logic";
+import { reduce, initialState, listenSpan, radioAnswer } from "./logic";
 import type { Difficulty, RunState } from "./types";
 
 function play(seed: string, difficulty: Difficulty): RunState {
@@ -336,6 +336,47 @@ describe("decodifiche manuali", () => {
     expect(said[2]).toContain(`Terza cifra: ${bomb.code[2]}`);
     expect(said[3]).toContain(`Codice: ${bomb.code}`);
     expect(s.decoded).toEqual({ uv: true, blinks: true, morse: true });
+  });
+});
+
+describe("complice alla radio", () => {
+  test("dice fatti veri sulla scena e mai quale filo", () => {
+    for (const seed of SEEDS.slice(0, 60)) {
+      const s = play(seed, "protagonista");
+      const b = s.bomb!;
+      expect(radioAnswer(b, "tagli").includes("due")).toBe(solve(seed, "protagonista").cuts === 2);
+      expect(radioAnswer(b, "gemello").startsWith("Sì")).toBe(b.twin !== null);
+      expect(radioAnswer(b, "rotti").startsWith("Nessuno")).toBe(!b.wires.some((w) => w.open));
+      for (const ask of ["trappole", "tagli", "gemello", "rotti", "uv"] as const) {
+        expect(radioAnswer(b, ask)).not.toMatch(/rosso|blu|verde|giallo|nero|bianco|viola|grigio|marrone|arancio/i);
+      }
+    }
+  });
+
+  test("costa secondi una volta sola, e con l'antenna in ascolto anche un ping", () => {
+    const quiet = SEEDS.map((seed) => play(seed, "comparsa")).find((s) => !s.bomb!.gates.receiver)!;
+    let s = reduce(quiet, { type: "radio", ask: "trappole" });
+    expect(quiet.secondsLeft - s.secondsLeft).toBe(8);
+    expect(s.asked).toEqual(["trappole"]);
+    const again = reduce(s, { type: "radio", ask: "trappole" });
+    expect(again.secondsLeft).toBe(s.secondsLeft);
+    expect(again.asked).toEqual(["trappole"]);
+
+    const loud = SEEDS.map((seed) => play(seed, "protagonista")).find((x) => x.bomb!.gates.receiver)!;
+    s = reduce(loud, { type: "radio", ask: "gemello" });
+    expect(loud.secondsLeft - s.secondsLeft).toBe(8 + 7);
+    expect(s.log.at(-1)!.text).toContain("sveglia l'antenna");
+  });
+
+  test("in prova non costa, e senza suggeritore la radio è muta", () => {
+    let s = reduce(initialState(), { type: "start", seed: "RADIO1", difficulty: "caratterista", mode: "prova" });
+    const before = s.secondsLeft;
+    s = reduce(s, { type: "radio", ask: "uv" });
+    expect(s.secondsLeft).toBe(before);
+    let m = reduce(initialState(), { type: "start", seed: "RADIO1", difficulty: "caratterista", mode: "ripresa", mods: ["suggeritore-muto"] });
+    m = reduce(m, { type: "radio", ask: "uv" });
+    expect(m.asked).toEqual([]);
+    expect(m.log.at(-1)!.text).toContain("fruscio");
   });
 });
 

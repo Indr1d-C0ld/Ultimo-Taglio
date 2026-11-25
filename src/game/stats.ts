@@ -27,6 +27,8 @@ export interface RunRecord {
   /** Seconds taken by penalties rather than by the clock. */
   lost: number;
   hints: number;
+  /** Questions put to the accomplice on the radio. Missing in records from before the radio. */
+  calls?: number;
   mistakes: number;
   forced: number;
   probes: number;
@@ -101,6 +103,7 @@ export function scoreSheet(r: Omit<RunRecord, "score" | "grade">): ScoreLine[] {
   if (r.dialMatched) lines.push({ label: "Contatore B allineato", points: 250 });
   if (r.decoyCuts === 0) lines.push({ label: "Nessun taglio a vuoto", points: 150 });
   if (r.hints) lines.push({ label: `Suggerimenti (${r.hints})`, points: -250 * r.hints });
+  if (r.calls) lines.push({ label: `Chiamate alla radio (${r.calls})`, points: -60 * r.calls });
   if (r.mistakes) lines.push({ label: `Errori (${r.mistakes})`, points: -150 * r.mistakes });
   const subtotal = lines.reduce((sum, l) => sum + l.points, 0);
   if (r.hints === 0 && r.mistakes === 0) {
@@ -143,6 +146,7 @@ export function recordOf(s: RunState, at: number, outcome: Outcome): RunRecord |
     elapsed,
     lost: s.mode === "ripresa" ? Math.max(0, Math.round(spent - s.tally.elapsed)) : 0,
     hints: s.hintsUsed,
+    calls: s.asked.length,
     mistakes: s.mistakes,
     forced: s.forceNicks,
     probes: s.tally.probes,
@@ -299,6 +303,7 @@ export const AWARDS: Award[] = [
   { id: "metodo", title: "Metodo Stanislavskij", text: "Vinci dopo aver misurato ogni singolo filo.", earned: (r) => won(r).some((x) => x.wiresRead >= x.wires) },
   { id: "doppio", title: "Doppio taglio", text: "Apri una linea che aveva due rami in parallelo.", earned: (_, c) => c.doubleCuts >= 1 },
   { id: "coda", title: "Colpo di coda", text: "Ferma il secondo timer dopo che si è svegliato.", earned: (r) => won(r).some((x) => x.twin === "partito") },
+  { id: "silenzio", title: "Silenzio radio", text: "Disinnesca da protagonista senza radio e senza suggeritore.", earned: (r) => won(r).some((x) => x.difficulty === "protagonista" && x.hints === 0 && x.calls === 0) },
   { id: "buio", title: "Al buio", text: "Disinnesca con il display spento.", earned: (r) => won(r).some((x) => x.displayDead) },
   { id: "carrozzerie", title: "Tris di carrozzerie", text: "Vinci con valigetta, cilindro e console.", earned: (_, c) => Object.values(c.byArchetype).every((s) => s.won >= 1) },
   { id: "serie", title: "Cinque ciak di fila", text: "Cinque disinneschi consecutivi in ripresa.", earned: (_, c) => c.bestStreak >= 5 },

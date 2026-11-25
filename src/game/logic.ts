@@ -1,10 +1,10 @@
-import { lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
+import { cutsNeeded, lineClosed, probeReading, wireSeat, type NetView } from "./circuit";
 import { bruiseHealed, bruiseOf, bridgeRest, bridgeSentence, firingPath, stepBridge, BRIDGE_BRUISE } from "./detonator";
 import { generateBomb, UV_SPOTS } from "./generate";
 import { fitLine } from "./kit";
 import { BLUNT_CUT_COST, tuningFor } from "./tuning";
 import { colorName, terminalLabel } from "./palette";
-import type { Action, Bomb, Difficulty, EndCause, LogLine, Mode, Modifier, RunState, Wire } from "./types";
+import type { Action, Bomb, RadioAsk, Difficulty, EndCause, LogLine, Mode, Modifier, RunState, Wire } from "./types";
 
 const TILT_LIMIT = 0.32;
 /** How far the hand can tip the prop: enough to show its underside to a low camera. */
@@ -44,6 +44,7 @@ export function initialState(): RunState {
     log: [],
     logSeq: 1,
     hintsUsed: 0,
+    asked: [],
     mistakes: 0,
     attitude: { x: 0, z: 0 },
     listenLeft: 0,
@@ -248,6 +249,8 @@ function step(state: RunState, action: Action): RunState {
       return onListen(state);
     case "hint":
       return onHint(state);
+    case "radio":
+      return onRadio(state, action.ask);
     default:
       return state;
   }
@@ -766,6 +769,77 @@ function onHint(s: RunState): RunState {
   }
   n = note(n, `Suggerimento: ${text}`);
   return say(n, text, "warn");
+}
+
+/** Seconds of airtime one question costs in a take. */
+export const RADIO_COST = 8;
+
+export const RADIO_ASKS: { id: RadioAsk; label: string }[] = [
+  { id: "trappole", label: "Quante trappole?" },
+  { id: "tagli", label: "Quanti tagli sulla linea?" },
+  { id: "gemello", label: "C'è un secondo timer?" },
+  { id: "rotti", label: "Fili rotti sotto la guaina?" },
+  { id: "uv", label: "Dove punto la UV?" },
+];
+
+/** The receiver is listening: any transmission near it, the accomplice's included, sets it off. */
+export function antennaLive(s: RunState): boolean {
+  const b = s.bomb;
+  if (!b || !b.gates.receiver || s.codeUnlocked) return false;
+  const senso = b.wires.find((w) => w.role === "senso");
+  return !(senso && s.cutIds.includes(senso.id));
+}
+
+/** What a call costs right now: airtime, doubled on a bad line, plus the ping it provokes. */
+export function radioCost(s: RunState): number {
+  if (!s.bomb || s.mode !== "ripresa") return 0;
+  const air = RADIO_COST * (s.mods.includes("radio-disturbata") ? 2 : 1);
+  return air + (antennaLive(s) ? tuningFor(s.bomb.difficulty, s.mods).pingCost : 0);
+}
+
+/** The accomplice reads the builder's drawings: counts and places, true every time, never which wire. */
+export function radioAnswer(b: Bomb, ask: RadioAsk): string {
+  switch (ask) {
+    case "trappole": {
+      const n = b.wires.filter((w) => w.role === "trappola").length;
+      return n === 1
+        ? "Dallo schema, fra la cella e l'innesco c'è un tratto solo. Una trappola: trovala e non toccarla."
+        : `Dallo schema conto ${n} tratti fra la cella e l'innesco. ${cap(numero(n))} trappole: nessuna va toccata.`;
+    }
+    case "tagli":
+      return cutsNeeded(b) > 1
+        ? "La linea dell'inibitore qui si sdoppia: due rami in parallelo. Un taglio non basta, ne servono due."
+        : "La linea dell'inibitore è un ramo solo. Un taglio, quello giusto, e hai finito.";
+    case "gemello":
+      return b.twin !== null
+        ? `Sì. Sotto l'innesco ce n'è un altro, da ${b.twin} secondi. Cerca un terzo morsetto, con scritto TEST, e toglili il filo prima di aprire la linea.`
+        : "No. Ho girato lo schema tre volte: un timer solo. Quando il display si ferma, è finita davvero.";
+    case "rotti": {
+      const n = b.wires.filter((w) => w.open).length;
+      return n === 0
+        ? "Nessuno. Qui ogni filo intero conduce: se il multimetro dice aperto, è una perla di senso."
+        : `${cap(numero(n))}. ${n === 1 ? "Sembra intero ma ha" : "Sembrano interi ma hanno"} l'anima spezzata: non ${n === 1 ? "conta" : "contano"} per nessun percorso. Solo il multimetro te lo dice.`;
+    }
+    case "uv":
+      return b.gates.keypad
+        ? `Chi l'ha costruito firma sempre nello stesso posto. Punta la lampada ${UV_SPOTS[b.uvSpot]}. La cifra te la leggi tu.`
+        : "Qui non c'è tastierino e non c'è codice: la UV lasciala in borsa.";
+  }
+}
+
+const NUMERI = ["zero", "uno", "due", "tre", "quattro", "cinque", "sei", "sette", "otto", "nove"];
+function numero(n: number): string {
+  return NUMERI[n] ?? String(n);
+}
+
+function onRadio(s: RunState, ask: RadioAsk): RunState {
+  if (!live(s) || !s.bomb) return s;
+  if (s.mods.includes("suggeritore-muto")) return say(s, "Sulla radio c'è solo fruscio. In questa scena sei da solo.", "warn");
+  const answer = radioAnswer(s.bomb, ask);
+  if (s.asked.includes(ask)) return say(s, `Radio, di nuovo: «${answer}»`, "info");
+  const ping = antennaLive(s) && s.mode === "ripresa";
+  const n: RunState = { ...s, asked: [...s.asked, ask], secondsLeft: Math.max(1, s.secondsLeft - radioCost(s)) };
+  return say(n, `Radio: «${answer}»${ping ? " La trasmissione sveglia l'antenna: ti costa anche un ping." : ""}`, "warn");
 }
 
 /** What the prompter says next. In the code stage each line gives away one digit. */

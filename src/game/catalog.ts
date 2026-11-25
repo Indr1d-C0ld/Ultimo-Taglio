@@ -97,6 +97,7 @@ export const ARTICLES: Article[] = [
       "Quattro cifre, poi OK. Giusto: lo sportello sulla sicura si ritrae e l'antenna, se c'era, smette di rubare tempo. Sbagliato: il codice si cancella e la ripresa perde dieci secondi.",
       "Le cifre non stanno mai tutte nello stesso posto e vanno lette di persona. La lampada UV spegne le luci di scena e fa brillare una cifra dipinta sul guscio: può stare su un fianco, dietro, sul fondo o, nella valigetta, sotto la base: lì la camera non arriva, e va sollevata con il maneggio. Va cercata girandoci intorno.",
       "Il taccuino del codice, nella scheda, ha quattro caselle: le riempi tu man mano. Il suggeritore, a pagamento di secondi, regala una cifra per volta.",
+      "Alla radio c'è un complice con lo schema del costruttore davanti. Non dice mai quale filo: dice quante trappole ci sono, se la linea vuole uno o due tagli, se sotto l'innesco c'è un secondo timer, quanti fili sono rotti sotto la guaina, dove puntare la UV. Ogni domanda costa otto secondi, il doppio se la radio è disturbata; richiederla è gratis. Ma una trasmissione vicino a un'antenna in ascolto la sveglia: finché il codice non la zittisce, ogni chiamata si paga anche con un ping.",
       "Puoi comporre dal dossier anche se il vetro è ancora chiuso. Lo sportello fisico, però, libera il filo solo quando il banco è aperto e le altre guardie sono a posto.",
     ],
   },

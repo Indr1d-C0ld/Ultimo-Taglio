@@ -3,6 +3,7 @@ let muted = false;
 
 export function setMuted(next: boolean) {
   muted = next;
+  if (next) hushVoice();
   if (score && ctx) score.out.gain.setTargetAtTime(next ? 0 : 1, ctx.currentTime, 0.05);
 }
 
@@ -226,4 +227,58 @@ export function stopScore() {
     for (const osc of done.nodes) osc.stop();
     done.out.disconnect();
   }, 700);
+}
+
+
+/** The burst of static that opens and closes a transmission. */
+export function squelch(dur = 0.16) {
+  unlockAudio();
+  if (!ctx || muted) return;
+  const t = ctx.currentTime;
+  const len = Math.floor(ctx.sampleRate * dur);
+  const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const band = ctx.createBiquadFilter();
+  band.type = "bandpass";
+  band.frequency.value = 2200;
+  band.Q.value = 0.8;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.05, t);
+  g.gain.setValueAtTime(0.05, t + dur * 0.8);
+  g.gain.linearRampToValueAtTime(0.0001, t + dur);
+  src.connect(band);
+  band.connect(g);
+  g.connect(ctx.destination);
+  src.start(t);
+}
+
+/**
+ * Says a radio line aloud with the browser's own voice, when it has an Italian one, between
+ * two bursts of static. A machine without voices just gets the static and the written line.
+ */
+export function radioVoice(text: string) {
+  squelch();
+  if (muted || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const line = new SpeechSynthesisUtterance(text.replace(/[«»]/g, ""));
+    line.lang = "it-IT";
+    const voice = synth.getVoices().find((v) => v.lang.toLowerCase().startsWith("it"));
+    if (voice) line.voice = voice;
+    line.rate = 1.08;
+    line.pitch = 0.85;
+    line.volume = 0.9;
+    line.onend = () => squelch(0.1);
+    synth.speak(line);
+  } catch {
+    // No voice on this machine: the line is in the log anyway.
+  }
+}
+
+export function hushVoice() {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
