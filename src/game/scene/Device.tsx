@@ -21,7 +21,7 @@ import { touch } from "./Hand";
 import { paint } from "./paint";
 import { SHELLS, ShellModel, type ShellFit } from "./Shell";
 
-function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | null {
+export function pointOf(bomb: Bomb, id: string, exploded: boolean): THREE.Vector3 | null {
   for (const mod of bomb.modules) {
     const terminal = mod.terminals.find((t) => t.id === id);
     if (!terminal) continue;
@@ -99,6 +99,16 @@ export function inspectPoint(bomb: Bomb, id: string, exploded: boolean): THREE.V
   if (!mod) return null;
   const at = moduleHome(bomb, mod, exploded);
   return new THREE.Vector3(at[0], at[1] + benchY(bomb.archetype) + 0.08, at[2]);
+}
+
+/**
+ * A wire ends on its post and its grab area covers the post's top. With a tool that works on
+ * posts in hand (meter, crocodile clips), the post under the pointer wins over the wire.
+ */
+function postBehind(e: ThreeEvent<PointerEvent | MouseEvent>): boolean {
+  const tool = useGame.getState().tool;
+  if (tool !== "multimetro" && tool !== "ponticello") return false;
+  return e.intersections.some((hit) => hit.object.userData.post === true);
 }
 
 /** Pointer handlers that report what is under the cursor and show a hand over it. */
@@ -260,6 +270,7 @@ function Post({ id, position, rotation, owner }: { id: string; position: Vec3; r
       <mesh
         rotation={rotation}
         castShadow
+        userData={{ post: true }}
         onClick={(e) => {
           e.stopPropagation();
           dispatch({ type: "pointer-terminal", id });
@@ -548,10 +559,20 @@ function HarnessWires() {
             <mesh
               geometry={item.hit}
               onClick={(e) => {
+                if (postBehind(e)) return;
                 e.stopPropagation();
                 dispatch({ type: "pointer-wire", id });
               }}
               {...hoverHandlers(`w:${id}`)}
+              onPointerOver={(e) => {
+                if (!postBehind(e)) hoverHandlers(`w:${id}`).onPointerOver(e);
+              }}
+              onPointerMove={(e) => {
+                touch(e.point);
+                if (postBehind(e)) return;
+                // Sliding off a post while still on the wire: the wire takes the hover back.
+                if (useGame.getState().hoverId !== `w:${id}`) hoverHandlers(`w:${id}`).onPointerOver(e);
+              }}
             >
               <meshBasicMaterial transparent opacity={0.01} depthWrite={false} />
             </mesh>

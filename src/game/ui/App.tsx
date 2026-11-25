@@ -136,6 +136,7 @@ export function App() {
             <InspectBar />
             <SceneRules />
             <Notebook />
+            <NotebookNudge />
             <HoverChip />
           </div>
           <Dossier />
@@ -436,6 +437,23 @@ function SceneRules() {
         {mods.length > 0 && <p className="text-[11px] text-lcd">{mods.map((m) => MODIFIERS[m].label).join(" · ")}</p>}
       </div>
     </div>
+  );
+}
+
+/** After the first reading: says where it went, without covering the bench. */
+function NotebookNudge() {
+  const on = useGame((s) => s.notebookNudge && s.phase === "play");
+  const toggleNotebook = useGame((s) => s.toggleNotebook);
+  if (!on) return null;
+  return (
+    <button
+      type="button"
+      onClick={toggleNotebook}
+      className="pointer-events-auto absolute bottom-3 left-3 rounded-sm border border-lcd bg-bg-raised/95 px-3 py-2 text-left text-xs text-fg"
+    >
+      Prima lettura segnata sul taccuino.
+      <span className="ml-2 text-lcd">Apri lo schema (T)</span>
+    </button>
   );
 }
 

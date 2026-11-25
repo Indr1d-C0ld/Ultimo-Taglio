@@ -52,6 +52,8 @@ interface UiState {
   toggleEffects: () => void;
   /** The circuit notebook, floating over the bench. */
   notebook: boolean;
+  /** The first reading of a scene is on the schematic and the player has not opened it yet. */
+  notebookNudge: boolean;
   toggleNotebook: () => void;
   /** Counts scenes started, so the opening slate replays on every take. */
   take: number;
@@ -198,12 +200,13 @@ export const useGame = create<GameStore>((set, get) => ({
     } else if (action.type === "abort" && prev.phase === "play" && prev.tally.elapsed >= 10) {
       filed = file(toRun(prev), "abort");
     }
-    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, take: prev.take + 1, notebook: false, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
+    if (action.type === "start") set({ ...next, ...filed, archive: false, panel: null, film: false, take: prev.take + 1, notebook: false, notebookNudge: false, newAwards: [], inspectId: null, hoverId: null, codePad: ["", "", "", ""] });
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
-    // The first reading of a scene opens the notebook, once: after that it is the player's to keep or close.
-    else if (prev.knownWireIds.length === 0 && next.knownWireIds.length === 1) set({ ...next, ...filed, notebook: true });
+    // The first reading of a scene points at the notebook instead of opening it: the sheet is
+    // wide, and landing on the bench mid-measurement it would cover the very posts being probed.
+    else if (prev.knownWireIds.length === 0 && next.knownWireIds.length === 1) set({ ...next, ...filed, notebookNudge: !prev.notebook });
     // The scene is over: the notebook folds away so the end card is not hidden behind it.
-    else if (prev.phase === "play" && next.phase !== "play") set({ ...next, ...filed, notebook: false });
+    else if (prev.phase === "play" && next.phase !== "play") set({ ...next, ...filed, notebook: false, notebookNudge: false });
     else set({ ...next, ...filed });
   },
   save: loadSave(),
@@ -222,7 +225,8 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ effects });
   },
   notebook: false,
-  toggleNotebook: () => set({ notebook: !get().notebook }),
+  notebookNudge: false,
+  toggleNotebook: () => set({ notebook: !get().notebook, notebookNudge: false }),
   take: 0,
   film: false,
   toggleFilm: () => set({ film: !get().film }),

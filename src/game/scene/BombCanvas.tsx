@@ -39,6 +39,7 @@ export function BombCanvas() {
       <Controls />
       <Clock />
       <Maneggio />
+      <DevHandle />
       <Effects />
     </Canvas>
   );
@@ -181,6 +182,15 @@ function Clock() {
       useGame.getState().dispatch({ type: "tick", dt: step });
     }
   });
+  return null;
+}
+
+/** Development only: lets a test script project bench points to the screen and click them for real. */
+function DevHandle() {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    if (import.meta.env.DEV) (window as unknown as { __utCamera?: THREE.Camera }).__utCamera = camera;
+  }, [camera]);
   return null;
 }
 
