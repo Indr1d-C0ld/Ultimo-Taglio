@@ -36,7 +36,6 @@ function writeFlag(key: string, value: boolean) {
 interface UiState {
   archive: boolean;
   sound: boolean;
-  dossier: boolean;
   /** Mirror of what is in storage, so the screens re-render when it changes. */
   save: Save;
   lastRun: RunRecord | null;
@@ -74,7 +73,6 @@ interface UiState {
   dispatch: (action: Action) => void;
   toggleArchive: () => void;
   toggleSound: () => void;
-  toggleDossier: () => void;
 }
 
 export type Panel = "partita" | "carriera" | "fama" | "graduatoria" | "premi" | "camerino";
@@ -155,7 +153,6 @@ export const useGame = create<GameStore>((set, get) => ({
   ...initialState(),
   archive: false,
   sound: true,
-  dossier: false,
   dispatch: (action) => {
     const prev = get();
     if (action.type === "start" || action.type === "pointer-terminal" || action.type === "keypad") unlockAudio();
@@ -257,7 +254,6 @@ export const useGame = create<GameStore>((set, get) => ({
     setMuted(!sound);
     set({ sound });
   },
-  toggleDossier: () => set({ dossier: !get().dossier }),
 }));
 
 export function emitView(type: "zoom-in" | "zoom-out" | "reset" | "focus") {

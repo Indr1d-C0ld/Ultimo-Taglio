@@ -494,32 +494,78 @@ function TiltGauge() {
   );
 }
 
+type DossierTab = "selezione" | "appunti" | "radio";
+
+/**
+ * The right-hand sheet, in three leaves so nothing needs scrolling for: what is selected and
+ * what can be done to it, the player's own notes, and the radio.
+ */
 function Dossier() {
-  const open = useGame((s) => s.dossier);
   const phase = useGame((s) => s.phase);
   const bomb = useGame((s) => s.bomb);
   const selectedId = useGame((s) => s.selectedId);
   const dispatch = useGame((s) => s.dispatch);
-  const toggleDossier = useGame((s) => s.toggleDossier);
-  const known = useGame((s) => s.knownWireIds);
-  const notebook = useGame((s) => s.notebook);
-  const toggleNotebook = useGame((s) => s.toggleNotebook);
+  const notes = useGame((s) => s.notes.length);
+  const asked = useGame((s) => s.asked.length + s.hintsUsed);
+  const [tab, setTab] = useState<DossierTab>("selezione");
+  // Picking something on the bench brings its leaf forward.
+  useEffect(() => setTab("selezione"), [selectedId]);
   if (phase === "boot" || !bomb) return null;
+  const tabs: { id: DossierTab; label: string; count?: number }[] = [
+    { id: "selezione", label: "Selezione" },
+    { id: "appunti", label: "Appunti", count: notes },
+    { id: "radio", label: "Radio", count: asked },
+  ];
+  return (
+    <aside className="pointer-events-auto flex w-80 shrink-0 flex-col border-l border-line bg-bg-raised/95">
+      <div className="flex shrink-0 border-b border-line" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`h-10 flex-1 border-b-2 font-display text-xs tracking-[0.16em] ${tab === t.id ? "border-accent text-fg" : "border-transparent text-muted"}`}
+          >
+            {t.label.toUpperCase()}
+            {t.count ? <span className="ml-1 font-mono text-[10px] text-lcd">{t.count}</span> : null}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {tab === "selezione" && <Selection />}
+        {tab === "appunti" && <Jottings />}
+        {tab === "radio" && <Radio />}
+      </div>
+      {phase === "play" && (
+        <button type="button" onClick={() => dispatch({ type: "abort" })} className="h-9 shrink-0 border-t border-line text-xs text-faint">
+          Abbandona la scena
+        </button>
+      )}
+    </aside>
+  );
+}
 
+function Heading({ children }: { children: ReactNode }) {
+  return <p className="mb-1 mt-4 text-[10px] tracking-[0.2em] text-muted">{children}</p>;
+}
+
+/** What is selected, what the hand can do to it, and the index of everything else on the bench. */
+function Selection() {
+  const bomb = useGame((s) => s.bomb);
+  const selectedId = useGame((s) => s.selectedId);
+  const dispatch = useGame((s) => s.dispatch);
+  const known = useGame((s) => s.knownWireIds);
+  const cutIds = useGame((s) => s.cutIds);
+  const marked = useGame((s) => s.markedIds);
+  if (!bomb) return null;
   const wire = findWire(bomb, selectedId);
   const module = bomb.modules.find((m) => m.id === selectedId);
   const wireKnown = !!wire && known.includes(wire.id);
-
+  const terminals = module?.terminals ?? (wire ? [] : bomb.chassisTerminals);
   return (
-    <aside
-      className={`pointer-events-auto absolute inset-x-0 bottom-0 z-20 max-h-[58%] overflow-y-auto border-line bg-bg-raised/95 p-3 md:static md:inset-auto md:block md:max-h-none md:w-80 md:border-l ${open ? "block" : "hidden md:block"}`}
-    >
-      <div className="mb-2 flex items-center justify-between md:hidden">
-        <p className="font-display tracking-widest text-fg">SCHEDA</p>
-        <button type="button" onClick={toggleDossier} className="grid size-11 place-items-center text-muted" aria-label="Chiudi scheda">
-          <X className="size-4" />
-        </button>
-      </div>
+    <>
       <p className="font-display tracking-[0.14em] text-fg">{wire ? colorName(wire.color) : module ? module.name : "Banco di scena"}</p>
       <p className="mt-1 text-sm text-muted">
         {wire
@@ -528,132 +574,138 @@ function Dossier() {
             : "Capi non ancora letti. Seguilo sul banco e sonda i due morsetti."
           : module
             ? MODULE_BLURB[module.kind]
-            : `${ARCHETYPES[bomb.archetype].blurb} Trascina per orbitare, pizzica o usa la rotella per lo zoom.`}
+            : `${ARCHETYPES[bomb.archetype].blurb} Trascina per orbitare, rotella per lo zoom.`}
       </p>
       <p className="mt-2 text-xs text-lcd">{fitLine(bomb, selectedId)}</p>
       {wire && <WireFacts id={wire.id} />}
-      {module && (
-        <button
-          type="button"
-          onClick={() => useGame.getState().setInspect(module.id)}
-          className="mt-2 h-10 w-full rounded-sm border border-line text-xs text-fg"
-        >
-          Ispeziona da vicino
-        </button>
-      )}
       {module?.kind === "keypad" && <KeypadPad />}
       {module?.kind === "dial" && <DialPad />}
       {module?.kind === "receiver" && <ListenButton />}
-      <Contacts />
-      <div className="mt-3 flex flex-wrap gap-1">
-        {bomb.modules.map((item) => (
+      <div className="mt-3 grid grid-cols-2 gap-1">
+        {module && (
+          <button type="button" onClick={() => useGame.getState().setInspect(module.id)} className="col-span-2 h-9 rounded-sm border border-line text-xs text-fg">
+            Ispeziona da vicino
+          </button>
+        )}
+        {terminals.map((terminal) => (
           <button
-            key={item.id}
+            key={terminal.id}
             type="button"
-            onClick={() => dispatch({ type: "select", id: item.id })}
-            className={`rounded-sm border px-2 py-1 text-xs ${selectedId === item.id ? "border-accent text-fg" : "border-line text-muted"}`}
+            onClick={() => dispatch({ type: "pointer-terminal", id: terminal.id })}
+            className="h-9 rounded-sm border border-line px-2 text-left text-xs text-fg"
           >
-            {item.name}
+            Morsetto {terminal.label}
           </button>
         ))}
-      </div>
-      <button type="button" onClick={toggleNotebook} className="mt-3 h-10 w-full rounded-sm border border-line text-xs text-fg">
-        {notebook ? "Chiudi il taccuino (T)" : "Apri il taccuino: schema del circuito (T)"}
-      </button>
-      <CodePad />
-      <Notes />
-      <Radio />
-      {phase === "play" && (
-        <button type="button" onClick={() => dispatch({ type: "abort" })} className="mt-2 h-10 w-full text-xs text-faint">
-          Abbandona la scena
-        </button>
-      )}
-    </aside>
-  );
-}
-
-function Contacts() {
-  const bomb = useGame((s) => s.bomb);
-  const selectedId = useGame((s) => s.selectedId);
-  const dispatch = useGame((s) => s.dispatch);
-  if (!bomb) return null;
-  const module = bomb.modules.find((item) => item.id === selectedId);
-  const wire = findWire(bomb, selectedId);
-  const terminals = module?.terminals ?? (selectedId === "chassis" || !module ? bomb.chassisTerminals : []);
-  return (
-    <div className="mt-3 space-y-1">
-      {terminals.map((terminal) => (
-        <button
-          key={terminal.id}
-          type="button"
-          onClick={() => dispatch({ type: "pointer-terminal", id: terminal.id })}
-          className="h-11 w-full rounded-sm border border-line px-2 text-left text-xs text-fg"
-        >
-          Morsetto {terminal.label}
-        </button>
-      ))}
-      {wire && (
-        <button
-          type="button"
-          onClick={() => {
-            dispatch({ type: "tool", tool: "tronchese" });
-            dispatch({ type: "pointer-wire", id: wire.id });
-          }}
-          className="h-11 w-full rounded-sm border border-accent text-sm text-fg"
-        >
-          Taglia questo filo
-        </button>
-      )}
-      {wire && (
-        <button
-          type="button"
-          onClick={() => {
-            dispatch({ type: "tool", tool: "nastro" });
-            dispatch({ type: "pointer-wire", id: wire.id });
-          }}
-          className="h-11 w-full rounded-sm border border-line text-sm text-muted"
-        >
-          Nastro su questo filo
-        </button>
-      )}
-      <div className="flex gap-1">
-        <button
-          type="button"
-          onClick={() => {
-            dispatch({ type: "tool", tool: "cacciavite" });
-            dispatch({ type: "pointer-latch" });
-          }}
-          className="h-11 flex-1 rounded-sm border border-line text-xs text-muted"
-        >
-          Chiusure
-        </button>
-        {bomb.gates.tilt && (
+        {wire && (
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: "tool", tool: "tronchese" });
+                dispatch({ type: "pointer-wire", id: wire.id });
+              }}
+              className="h-9 rounded-sm border border-accent text-xs text-fg"
+            >
+              Taglia questo filo
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                dispatch({ type: "tool", tool: "nastro" });
+                dispatch({ type: "pointer-wire", id: wire.id });
+              }}
+              className="h-9 rounded-sm border border-line text-xs text-muted"
+            >
+              {marked.includes(wire.id) ? "Togli il nastro" : "Metti il nastro"}
+            </button>
+          </>
+        )}
+        {!wire && !module && (
+          <button
+            type="button"
+            onClick={() => {
+              dispatch({ type: "tool", tool: "cacciavite" });
+              dispatch({ type: "pointer-latch" });
+            }}
+            className="col-span-2 h-9 rounded-sm border border-line text-xs text-muted"
+          >
+            Cacciavite sulle chiusure
+          </button>
+        )}
+        {module?.kind === "tilt" && (
           <button
             type="button"
             onClick={() => {
               dispatch({ type: "tool", tool: "brugola" });
               dispatch({ type: "pointer-tilt" });
             }}
-            className="h-11 flex-1 rounded-sm border border-line text-xs text-muted"
+            className="col-span-2 h-9 rounded-sm border border-line text-xs text-muted"
           >
-            Brugola
+            Brugola sulla vite di blocco
           </button>
         )}
       </div>
-      <div className="flex flex-wrap gap-1 pt-1">
-        {bomb.wires.map((item) => (
+
+      <Heading>
+        FILI · {known.length} letti su {bomb.wires.length}
+      </Heading>
+      <div className="grid grid-cols-3 gap-1">
+        {bomb.wires.map((item) => {
+          const cut = cutIds.includes(item.id);
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => dispatch({ type: "select", id: item.id })}
+              title={known.includes(item.id) ? `${terminalLabel(item.a)} → ${terminalLabel(item.b)}` : "Non ancora misurato"}
+              className={`flex h-8 items-center gap-1 rounded-sm border px-1.5 text-left text-xs ${selectedId === item.id ? "border-accent text-fg" : "border-line text-muted"} ${cut ? "line-through opacity-60" : ""}`}
+              style={{ borderLeftColor: colorHex(item.color), borderLeftWidth: 3 }}
+            >
+              <span className="min-w-0 flex-1 truncate">{colorName(item.color)}</span>
+              {marked.includes(item.id) && <span className="size-1.5 shrink-0 rounded-full bg-lcd" />}
+              <span className={`shrink-0 font-mono text-[10px] ${known.includes(item.id) ? "text-ok" : "text-faint"}`}>{known.includes(item.id) ? "✓" : "?"}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <Heading>MODULI</Heading>
+      <div className="grid grid-cols-2 gap-1">
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "select", id: "chassis" })}
+          className={`h-8 truncate rounded-sm border px-2 text-left text-xs ${!wire && !module ? "border-accent text-fg" : "border-line text-muted"}`}
+        >
+          Banco e chiusure
+        </button>
+        {bomb.modules.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => dispatch({ type: "select", id: item.id })}
-            className={`h-11 rounded-sm border px-2 text-xs ${selectedId === item.id ? "border-accent text-fg" : "border-line text-muted"}`}
-            style={{ borderLeftColor: colorHex(item.color), borderLeftWidth: 3 }}
+            className={`h-8 truncate rounded-sm border px-2 text-left text-xs ${selectedId === item.id ? "border-accent text-fg" : "border-line text-muted"}`}
           >
-            {colorName(item.color)}
+            {item.name}
           </button>
         ))}
       </div>
-    </div>
+    </>
+  );
+}
+
+/** The player's own leaf: the schematic, the four digit boxes, and what the meter has said so far. */
+function Jottings() {
+  const notebook = useGame((s) => s.notebook);
+  const toggleNotebook = useGame((s) => s.toggleNotebook);
+  return (
+    <>
+      <button type="button" onClick={toggleNotebook} className="h-10 w-full rounded-sm border border-line text-xs text-fg">
+        {notebook ? "Chiudi il taccuino (T)" : "Apri il taccuino: schema del circuito (T)"}
+      </button>
+      <CodePad />
+      <Notes />
+    </>
   );
 }
 
@@ -765,9 +817,10 @@ function Radio() {
   // Changes with the antenna and the rules, not with the clock.
   const cost = useGame((s) => radioCost(s));
   const antenna = useGame((s) => antennaLive(s) && s.mode === "ripresa");
-  if (!bomb || phase !== "play") return null;
+  if (!bomb) return null;
+  if (phase !== "play") return <p className="text-xs text-faint">La scena è chiusa: la radio tace.</p>;
   return (
-    <div className="mt-3 border border-line p-2">
+    <div>
       <div className="flex items-baseline justify-between">
         <p className="font-display text-xs tracking-widest text-lcd">RADIO · REGIA</p>
         <p className="text-[10px] text-faint">{dead ? "solo fruscio" : free ? "in prova non costa" : `−${cost} s a domanda`}</p>
