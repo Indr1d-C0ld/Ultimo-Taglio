@@ -24,7 +24,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { Component, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { Component, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import { ARTICLES, DIFFICULTY_COPY, DISCLAIMER } from "../catalog";
 import { wireSeat, type NetView } from "../circuit";
 import { ARCHETYPES } from "../generate";
@@ -37,6 +37,7 @@ import { AWARDS, GRADES, dailySeed } from "../stats";
 import { Records } from "./Records";
 import { Film } from "./Film";
 import { Notebook } from "./Notebook";
+import { chainDifficulty, chainResults, chainSeed, firstLink, nextLink } from "../sequence";
 import { MODIFIERS, nextScene, sceneById, stopLine, ciakOf, filmProgress } from "../campaign";
 import { emitView, useGame } from "../store";
 import { TUNING } from "../tuning";
@@ -369,7 +370,7 @@ function OpeningSlate() {
   const title = useGame((s) => s.bomb?.title ?? "");
   const phase = useGame((s) => s.phase);
   const performer = useGame((s) => activeProfile(s.save).name);
-  const film = useGame((s) => sceneById(s.campaign)?.title ?? "");
+  const film = useGame((s) => sceneById(s.campaign)?.title ?? (s.chain ? `Piano sequenza · scena ${s.chain.index + 1}` : ""));
   // Which take of this very scene: earlier attempts on the same seed and part, plus this one.
   const ciak = useGame((s) => 1 + activeProfile(s.save).runs.filter((r) => r.seed === s.seed && r.difficulty === s.difficulty).length);
   if (phase !== "play" || !take) return null;
@@ -869,6 +870,7 @@ function Boot() {
   const toggleFilm = useGame((s) => s.toggleFilm);
   const filmDone = useGame((s) => filmProgress(activeProfile(s.save).runs).filter((p) => p.done).length);
   const daily = dailySeed(new Date());
+  const bestChain = useGame((s) => chainResults(activeProfile(s.save).runs)[0]?.scenes ?? 0);
 
   useEffect(() => {
     setSeed(randomSeed());
@@ -901,6 +903,20 @@ function Boot() {
         <span className="lcd-readout shrink-0 text-sm">
           {filmDone} / 12
         </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const chain = firstLink(randomSeed());
+          dispatch({ type: "start", seed: chainSeed(chain.id, 0), difficulty: chainDifficulty(0), mode: "ripresa", chain });
+        }}
+        className="mt-2 flex w-full items-center justify-between gap-3 rounded-sm border border-line bg-surface p-3 text-left"
+      >
+        <span>
+          <span className="block font-display text-lg tracking-[0.14em] text-fg">PIANO SEQUENZA</span>
+          <span className="block text-sm text-muted">Una scena dopo l'altra, senza stacchi: sempre più difficili, sempre più corte. Il tempo che avanzi ti segue.</span>
+        </span>
+        <span className="lcd-readout shrink-0 text-sm">{bestChain ? `record ${bestChain}` : "—"}</span>
       </button>
       <p className="mt-4 text-[10px] tracking-[0.2em] text-muted">SCENA LIBERA</p>
       <div className="mt-1 grid gap-2">
@@ -996,7 +1012,12 @@ function EndCard() {
   const campaign = useGame((s) => s.campaign);
   const cause = useGame((s) => s.endCause);
   const toggleFilm = useGame((s) => s.toggleFilm);
+  const chain = useGame((s) => s.chain);
+  // Select the register itself and derive from it: a selector that builds a new object every read loops forever.
+  const runs = useGame((s) => activeProfile(s.save).runs);
+  const chainSoFar = useMemo(() => (chain ? chainResults(runs).find((c) => c.id === chain.id) : undefined), [runs, chain]);
   const ok = phase === "safe";
+  const link = chain && ok ? nextLink(chain, seconds) : null;
   const scene = sceneById(campaign);
   const next = scene && ok ? nextScene(scene.id) : undefined;
   return (
@@ -1009,6 +1030,22 @@ function EndCard() {
           <p>«{ok ? scene.wrap : stopLine(cause ?? "altro")}»</p>
           {ok && run && <p className="mt-1 text-xs text-lcd">{ciakOf(run.grade)} ciak su 3</p>}
         </blockquote>
+      )}
+      {chain && (
+        <div className="mt-3 border-l-2 border-lcd pl-3 text-sm text-fg">
+          <p className="text-[10px] tracking-[0.2em] text-muted">PIANO SEQUENZA</p>
+          {ok && link ? (
+            <p>
+              Scena {chain.index + 1} in macchina. Nessuno stacco: la prossima è da {DIFFICULTY_COPY[chainDifficulty(link.index)]!.label.toLowerCase()}
+              {link.carry ? `, e ti porti dietro ${link.carry} secondi.` : "."}
+            </p>
+          ) : (
+            <p>
+              Stacco. Il piano sequenza si chiude a {chainSoFar?.scenes ?? 0} {chainSoFar?.scenes === 1 ? "scena" : "scene"}
+              {chainSoFar?.score ? `, ${chainSoFar.score.toLocaleString("it-IT")} punti.` : "."}
+            </p>
+          )}
+        </div>
       )}
       {run && ok && (
         <div className="mt-3 flex items-end justify-between gap-3 border-y border-line py-2">
@@ -1041,14 +1078,27 @@ function EndCard() {
         {seed} · {ok ? formatClock(seconds) : "00:00"} · {mode === "prova" ? "prova" : "ripresa"}
       </p>
       <div className="mt-4 flex gap-2">
-        <button
-          type="button"
-          className="h-11 flex-1 rounded-sm bg-accent text-sm text-fg"
-          onClick={() => dispatch({ type: "start", seed, difficulty, mode, mods, campaign: campaign ?? undefined })}
-        >
-          {scene ? "Rigira la scena" : "Stesso seme"}
-        </button>
-        {scene ? (
+        {chain ? (
+          <button
+            type="button"
+            className="h-11 flex-1 rounded-sm bg-accent text-sm text-fg"
+            onClick={() => {
+              const go = link ?? firstLink(randomSeed());
+              dispatch({ type: "start", seed: chainSeed(go.id, go.index), difficulty: chainDifficulty(go.index), mode: "ripresa", chain: go });
+            }}
+          >
+            {link ? "Prossima scena, senza stacco" : "Nuovo piano sequenza"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="h-11 flex-1 rounded-sm bg-accent text-sm text-fg"
+            onClick={() => dispatch({ type: "start", seed, difficulty, mode, mods, campaign: campaign ?? undefined })}
+          >
+            {scene ? "Rigira la scena" : "Stesso seme"}
+          </button>
+        )}
+        {chain ? null : scene ? (
           <button
             type="button"
             className="h-11 flex-1 rounded-sm border border-line text-sm text-fg"

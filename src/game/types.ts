@@ -1,3 +1,4 @@
+import type { Chain } from "./sequence";
 export type Difficulty = "comparsa" | "caratterista" | "protagonista";
 export type Mode = "prova" | "ripresa";
 export type Archetype = "valigetta" | "cilindro" | "console";
@@ -161,6 +162,8 @@ export interface RunState {
   mods: Modifier[];
   /** Id of the campaign scene being shot, or null for a free scene. */
   campaign: string | null;
+  /** The long take this scene is a link of, or null. */
+  chain: Chain | null;
 }
 
 /** A rule a campaign scene adds on top of the ordinary ones. */
@@ -204,7 +207,7 @@ export interface Tally {
 }
 
 export type Action =
-  | { type: "start"; seed: string; difficulty: Difficulty; mode: Mode; mods?: Modifier[]; campaign?: string }
+  | { type: "start"; seed: string; difficulty: Difficulty; mode: Mode; mods?: Modifier[]; campaign?: string; chain?: Chain }
   | { type: "archive-denied" }
   | { type: "abort" }
   | { type: "tool"; tool: Tool }

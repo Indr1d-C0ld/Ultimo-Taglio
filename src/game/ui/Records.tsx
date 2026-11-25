@@ -243,6 +243,7 @@ function CareerView() {
         <Tile label="Disinneschi" value={c.won} note={`${percent(c.winRate)} di successo`} />
         <Tile label="Fine rullo" value={c.lost} note={`${c.abandoned} abbandonate`} />
         <Tile label="Serie in corso" value={c.streak} note={`migliore: ${c.bestStreak}`} />
+        <Tile label="Piano sequenza" value={c.bestChain || "—"} note="scene di fila, record" />
         <Tile label="Punteggio totale" value={points(c.totalScore)} />
         <Tile label="Miglior scena" value={points(c.bestScore)} note={`media ${points(c.averageScore)}`} />
         <Tile label="Tempo sul set" value={formatSpan(c.playSeconds)} />
@@ -403,6 +404,7 @@ function Standings() {
               <th className="py-1 text-right font-normal">VINTE / GIRATE</th>
               <th className="py-1 text-right font-normal">SUCCESSO</th>
               <th className="py-1 text-right font-normal">SERIE</th>
+              <th className="py-1 text-right font-normal">PIANO SEQ.</th>
             </tr>
           </thead>
           <tbody>
@@ -417,6 +419,7 @@ function Standings() {
                 </td>
                 <td className="py-2 text-right font-mono">{row.played ? percent(row.winRate) : "—"}</td>
                 <td className="py-2 text-right font-mono">{row.bestStreak}</td>
+                <td className="py-2 text-right font-mono">{row.bestChain || "—"}</td>
               </tr>
             ))}
           </tbody>

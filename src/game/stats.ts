@@ -1,3 +1,4 @@
+import { chainResults } from "./sequence";
 import type { Archetype, Difficulty, EndCause, Mode, RunState } from "./types";
 
 export type Outcome = "safe" | "boom" | "abort";
@@ -18,6 +19,8 @@ export interface RunRecord {
   daily: string | null;
   /** Campaign scene id and the rules it ran under. Absent on records from before the campaign. */
   campaign?: string | null;
+  /** The long take this scene was a link of. Absent on records from before it existed. */
+  chain?: { id: string; index: number } | null;
   mods?: string[];
   score: number;
   grade: Grade;
@@ -138,8 +141,9 @@ export function recordOf(s: RunState, at: number, outcome: Outcome): RunRecord |
     outcome,
     cause: outcome === "abort" ? ("altro" as const) : (s.endCause ?? "altro"),
     reason: outcome === "abort" ? "Scena abbandonata." : s.endReason,
-    daily: !s.campaign && bomb.seed === dailySeed(date) && bomb.difficulty === "caratterista" ? dayKey(date) : null,
+    daily: !s.campaign && !s.chain && bomb.seed === dailySeed(date) && bomb.difficulty === "caratterista" ? dayKey(date) : null,
     campaign: s.campaign,
+    chain: s.chain ? { id: s.chain.id, index: s.chain.index } : null,
     mods: s.mods,
     budget: bomb.seconds,
     left: outcome === "safe" ? s.secondsLeft : 0,
@@ -190,6 +194,8 @@ export interface Career {
   winRate: number;
   streak: number;
   bestStreak: number;
+  /** Longest long take: scenes defused without a cut. */
+  bestChain: number;
   totalScore: number;
   bestScore: number;
   averageScore: number;
@@ -261,6 +267,7 @@ export function careerOf(runs: RunRecord[]): Career {
     winRate: takes.length ? wins.length / takes.length : 0,
     streak,
     bestStreak,
+    bestChain: chainResults(runs)[0]?.scenes ?? 0,
     totalScore: sum(wins, (r) => r.score),
     bestScore: Math.max(0, ...wins.map((r) => r.score)),
     averageScore: wins.length ? Math.round(sum(wins, (r) => r.score) / wins.length) : 0,
@@ -304,6 +311,7 @@ export const AWARDS: Award[] = [
   { id: "doppio", title: "Doppio taglio", text: "Apri una linea che aveva due rami in parallelo.", earned: (_, c) => c.doubleCuts >= 1 },
   { id: "coda", title: "Colpo di coda", text: "Ferma il secondo timer dopo che si è svegliato.", earned: (r) => won(r).some((x) => x.twin === "partito") },
   { id: "silenzio", title: "Silenzio radio", text: "Disinnesca da protagonista senza radio e senza suggeritore.", earned: (r) => won(r).some((x) => x.difficulty === "protagonista" && x.hints === 0 && x.calls === 0) },
+  { id: "sequenza", title: "Senza stacchi", text: "Cinque scene di fila in un piano sequenza.", earned: (_, c) => c.bestChain >= 5 },
   { id: "buio", title: "Al buio", text: "Disinnesca con il display spento.", earned: (r) => won(r).some((x) => x.displayDead) },
   { id: "carrozzerie", title: "Tris di carrozzerie", text: "Vinci con valigetta, cilindro e console.", earned: (_, c) => Object.values(c.byArchetype).every((s) => s.won >= 1) },
   { id: "serie", title: "Cinque ciak di fila", text: "Cinque disinneschi consecutivi in ripresa.", earned: (_, c) => c.bestStreak >= 5 },

@@ -163,6 +163,7 @@ export interface Standing {
   totalScore: number;
   bestScore: number;
   bestStreak: number;
+  bestChain: number;
 }
 
 /** Performers on this device, ranked by career score. */
@@ -170,7 +171,7 @@ export function standings(save: Save): Standing[] {
   return save.profiles
     .map((profile) => {
       const c = careerOf(profile.runs);
-      return { profile, played: c.played, won: c.won, winRate: c.winRate, totalScore: c.totalScore, bestScore: c.bestScore, bestStreak: c.bestStreak };
+      return { profile, played: c.played, won: c.won, winRate: c.winRate, totalScore: c.totalScore, bestScore: c.bestScore, bestStreak: c.bestStreak, bestChain: c.bestChain };
     })
     .sort((a, b) => b.totalScore - a.totalScore || b.won - a.won);
 }

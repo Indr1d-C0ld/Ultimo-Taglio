@@ -4,6 +4,7 @@ import { generateBomb, UV_SPOTS } from "./generate";
 import { fitLine } from "./kit";
 import { BLUNT_CUT_COST, tuningFor } from "./tuning";
 import { colorName, terminalLabel } from "./palette";
+import { chainClock, type Chain } from "./sequence";
 import type { Action, Bomb, RadioAsk, Difficulty, EndCause, LogLine, Mode, Modifier, RunState, Wire } from "./types";
 
 const TILT_LIMIT = 0.32;
@@ -65,6 +66,7 @@ export function initialState(): RunState {
     twinLeft: null,
     mods: [],
     campaign: null,
+    chain: null,
     endCause: null,
     tally: { elapsed: 0, probes: 0, wrongCodes: 0, decoyCuts: 0, lineCuts: 0, stageAt: {} },
   };
@@ -216,7 +218,7 @@ function step(state: RunState, action: Action): RunState {
     case "abort":
       return { ...initialState(), difficulty: state.difficulty, mode: state.mode, seed: state.seed };
     case "start":
-      return start(action.seed, action.difficulty, action.mode, action.mods ?? [], action.campaign ?? null);
+      return start(action.seed, action.difficulty, action.mode, action.mods ?? [], action.campaign ?? null, action.chain ?? null);
     case "archive-denied":
       return state.phase === "play" ? say(state, "Il copione è strappato: l'archivio resta chiuso fino a fine scena.", "warn") : state;
     case "tool":
@@ -256,11 +258,21 @@ function step(state: RunState, action: Action): RunState {
   }
 }
 
-function start(seed: string, difficulty: Difficulty, mode: Mode, mods: Modifier[], campaign: string | null): RunState {
+function start(seed: string, difficulty: Difficulty, mode: Mode, mods: Modifier[], campaign: string | null, chain: Chain | null): RunState {
   const clean = seed.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12) || "CIAK01";
   const made = generateBomb(clean, difficulty);
-  const bomb = { ...made, seconds: tuningFor(difficulty, mods).seconds };
+  const base = tuningFor(difficulty, mods).seconds;
+  const bomb = { ...made, seconds: chain ? Math.round(base * chainClock(chain.index)) + chain.carry : base };
   let s = say(initialState(), `${bomb.title}. Seme ${clean}. Il tempo ${mode === "prova" ? "è in prova generale." : "è in ripresa."}`, "info");
+  if (chain) {
+    s = say(
+      s,
+      chain.index === 0
+        ? "Piano sequenza: nessuno stacco. Un terzo del tempo che avanzi te lo porti nella scena dopo."
+        : `Piano sequenza, scena ${chain.index + 1}. ${chain.carry ? `Ti porti dietro ${chain.carry} secondi.` : "Dalla scena prima non ti porti niente."}`,
+      "info",
+    );
+  }
   s = say(s, "I colori non hanno un significato fisso. Il multimetro legge il percorso: cella, giunti, perle, relè. Non il costume del filo.", "info");
   const broken = mods.includes("display-rotto");
   return {
@@ -273,6 +285,7 @@ function start(seed: string, difficulty: Difficulty, mode: Mode, mods: Modifier[
     secondsLeft: bomb.seconds,
     mods,
     campaign,
+    chain,
     // A dead display with no service cell: the count runs where nobody can read it.
     displayDead: broken,
     cellSpare: !broken,

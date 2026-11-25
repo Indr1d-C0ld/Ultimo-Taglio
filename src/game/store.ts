@@ -147,6 +147,7 @@ function toRun(s: GameStore): RunState {
     twinLeft: s.twinLeft,
     mods: s.mods,
     campaign: s.campaign,
+    chain: s.chain,
   };
 }
 
@@ -204,6 +205,8 @@ export const useGame = create<GameStore>((set, get) => ({
     else if (action.type === "abort") set({ ...next, ...filed, inspectId: null, hoverId: null });
     // The first reading of a scene opens the notebook, once: after that it is the player's to keep or close.
     else if (prev.knownWireIds.length === 0 && next.knownWireIds.length === 1) set({ ...next, ...filed, notebook: true });
+    // The scene is over: the notebook folds away so the end card is not hidden behind it.
+    else if (prev.phase === "play" && next.phase !== "play") set({ ...next, ...filed, notebook: false });
     else set({ ...next, ...filed });
   },
   save: loadSave(),
